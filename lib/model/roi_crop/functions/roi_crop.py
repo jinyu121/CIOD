@@ -4,6 +4,7 @@ from torch.autograd import Function
 from .._ext import roi_crop
 import pdb
 
+
 class RoICropFunction(Function):
     def forward(self, input1, input2):
         self.input1 = input1.clone()
@@ -17,5 +18,6 @@ class RoICropFunction(Function):
     def backward(self, grad_output):
         grad_input1 = self.input1.new(self.input1.size()).zero_()
         grad_input2 = self.input2.new(self.input2.size()).zero_()
-        roi_crop.BilinearSamplerBHWD_updateGradInput_cuda(self.input1, self.input2, grad_input1, grad_input2, grad_output)
+        roi_crop.BilinearSamplerBHWD_updateGradInput_cuda(self.input1, self.input2, grad_input1, grad_input2,
+                                                          grad_output)
         return grad_input1, grad_input2

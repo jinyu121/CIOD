@@ -17,8 +17,9 @@ import scipy.io as sio
 import subprocess
 import pdb
 import pickle
+
 try:
-    xrange          # Python 2
+    xrange  # Python 2
 except NameError:
     xrange = range  # Python 3
 
@@ -51,10 +52,10 @@ class imagenet(imdb):
         self._wnid_to_ind = dict(zip(self._wnid, xrange(31)))
         self._class_to_ind = dict(zip(self._classes, xrange(31)))
 
-        #check for valid intersection between video and image classes
-        self._valid_image_flag = [0]*201
+        # check for valid intersection between video and image classes
+        self._valid_image_flag = [0] * 201
 
-        for i in range(1,201):
+        for i in range(1, 201):
             if self._wnid_image[i] in self._wnid_to_ind:
                 self._valid_image_flag[i] = 1
 
@@ -65,9 +66,9 @@ class imagenet(imdb):
         self._roidb_handler = self.gt_roidb
 
         # Specific config options
-        self.config = {'cleanup'  : True,
-                       'use_salt' : True,
-                       'top_k'    : 2000}
+        self.config = {'cleanup': True,
+                       'use_salt': True,
+                       'top_k': 2000}
 
         assert os.path.exists(self._devkit_path), 'Devkit path does not exist: {}'.format(self._devkit_path)
         assert os.path.exists(self._data_path), 'Path does not exist: {}'.format(self._data_path)
@@ -105,7 +106,7 @@ class imagenet(imdb):
                 f.close()
                 return image_index
 
-            for i in range(1,200):
+            for i in range(1, 200):
                 print(i)
                 image_set_file = os.path.join(self._data_path, 'ImageSets', 'DET', 'train_' + str(i) + '.txt')
                 with open(image_set_file) as f:
@@ -113,7 +114,8 @@ class imagenet(imdb):
                     vtmp_index = []
                     for line in tmp_index:
                         line = line.split(' ')
-                        image_list = os.popen('ls ' + self._data_path + '/Data/DET/train/' + line[0] + '/*.JPEG').read().split()
+                        image_list = os.popen(
+                            'ls ' + self._data_path + '/Data/DET/train/' + line[0] + '/*.JPEG').read().split()
                         tmp_list = []
                         for imgs in image_list:
                             tmp_list.append(imgs[:-5])
@@ -126,7 +128,7 @@ class imagenet(imdb):
                     image_index.append(vtmp_index[ids[count % num_lines]])
                     count = count + 1
 
-            for i in range(1,201):
+            for i in range(1, 201):
                 if self._valid_image_flag[i] == 1:
                     image_set_file = os.path.join(self._data_path, 'ImageSets', 'train_pos_' + str(i) + '.txt')
                     with open(image_set_file) as f:
@@ -168,7 +170,6 @@ class imagenet(imdb):
 
         return gt_roidb
 
-
     def _load_imagenet_annotation(self, index):
         """
         Load image and bounding boxes info from txt files of imagenet.
@@ -196,19 +197,22 @@ class imagenet(imdb):
             x2 = float(get_data_from_tag(obj, 'xmax'))
             y2 = float(get_data_from_tag(obj, 'ymax'))
             cls = self._wnid_to_ind[
-                    str(get_data_from_tag(obj, "name")).lower().strip()]
+                str(get_data_from_tag(obj, "name")).lower().strip()]
             boxes[ix, :] = [x1, y1, x2, y2]
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
 
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
-        return {'boxes' : boxes,
+        return {'boxes': boxes,
                 'gt_classes': gt_classes,
-                'gt_overlaps' : overlaps,
-                'flipped' : False}
+                'gt_overlaps': overlaps,
+                'flipped': False}
+
 
 if __name__ == '__main__':
     d = datasets.imagenet('val', '')
     res = d.roidb
-    from IPython import embed; embed()
+    from IPython import embed;
+
+    embed()

@@ -30,9 +30,10 @@ from .voc_eval import voc_eval
 from model.utils.config import cfg
 
 try:
-    xrange          # Python 2
+    xrange  # Python 2
 except NameError:
     xrange = range  # Python 3
+
 
 # <<<< obsolete
 

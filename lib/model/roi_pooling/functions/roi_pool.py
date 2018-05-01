@@ -3,6 +3,7 @@ from torch.autograd import Function
 from .._ext import roi_pooling
 import pdb
 
+
 class RoIPoolFunction(Function):
     def __init__(ctx, pooled_height, pooled_width, spatial_scale):
         ctx.pooled_width = pooled_width
@@ -10,8 +11,8 @@ class RoIPoolFunction(Function):
         ctx.spatial_scale = spatial_scale
         ctx.feature_size = None
 
-    def forward(ctx, features, rois): 
-        ctx.feature_size = features.size()           
+    def forward(ctx, features, rois):
+        ctx.feature_size = features.size()
         batch_size, num_channels, data_height, data_width = ctx.feature_size
         num_rois = rois.size(0)
         output = features.new(num_rois, num_channels, ctx.pooled_height, ctx.pooled_width).zero_()
@@ -28,7 +29,7 @@ class RoIPoolFunction(Function):
         return output
 
     def backward(ctx, grad_output):
-        assert(ctx.feature_size is not None and grad_output.is_cuda)
+        assert (ctx.feature_size is not None and grad_output.is_cuda)
         batch_size, num_channels, data_height, data_width = ctx.feature_size
         grad_input = grad_output.new(batch_size, num_channels, data_height, data_width).zero_()
 
