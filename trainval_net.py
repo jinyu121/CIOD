@@ -64,14 +64,8 @@ def parse_args():
     parser.add_argument('--nw', dest='num_workers',
                         help='number of worker to load data',
                         default=0, type=int)
-    parser.add_argument('--cuda', dest='cuda',
-                        help='whether use CUDA',
-                        action='store_true')
     parser.add_argument('--ls', dest='large_scale',
                         help='whether use large imag scale',
-                        action='store_true')
-    parser.add_argument('--mGPUs', dest='mGPUs',
-                        help='whether use multiple GPUs',
                         action='store_true')
     parser.add_argument('--bs', dest='batch_size',
                         help='batch_size',
@@ -160,6 +154,9 @@ if __name__ == '__main__':
         # Set the logger
         logger = Logger('./logs')
 
+    args.set_cfgs = None
+    args.imdb_name = None
+    imdbval_name = None
     if args.dataset == "pascal_voc":
         args.imdb_name = "voc_2007_trainval"
         args.imdbval_name = "voc_2007_test"
@@ -190,24 +187,25 @@ if __name__ == '__main__':
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
 
+    cfg.CUDA = torch.cuda.is_available()
+    cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
+
     print('Using config:')
     pprint.pprint(cfg)
     np.random.seed(cfg.RNG_SEED)
 
     # torch.backends.cudnn.benchmark = True
-    if torch.cuda.is_available() and not args.cuda:
-        print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
     # train set
     # -- Note: Use validation set and disable the flipped to enable faster loading.
     cfg.TRAIN.USE_FLIPPED = True
-    cfg.USE_GPU_NMS = args.cuda
+    cfg.USE_GPU_NMS = cfg.CUDA
     imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
     train_size = len(roidb)
 
     print('{:d} roidb entries'.format(len(roidb)))
 
-    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
+    output_dir = os.path.join(args.save_dir, args.net, args.dataset)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -226,7 +224,7 @@ if __name__ == '__main__':
     gt_boxes = torch.FloatTensor(1)
 
     # ship to cuda
-    if args.cuda:
+    if cfg.CUDA:
         im_data = im_data.cuda()
         im_info = im_info.cuda()
         num_boxes = num_boxes.cuda()
@@ -237,9 +235,6 @@ if __name__ == '__main__':
     im_info = Variable(im_info)
     num_boxes = Variable(num_boxes)
     gt_boxes = Variable(gt_boxes)
-
-    if args.cuda:
-        cfg.CUDA = True
 
     # initilize the network here.
     if args.net == 'vgg16':
@@ -255,6 +250,11 @@ if __name__ == '__main__':
         pdb.set_trace()
 
     fasterRCNN.create_architecture()
+
+    if cfg.CUDA:
+        if cfg.MGPU:
+            fasterRCNN = nn.DataParallel(fasterRCNN)
+        fasterRCNN.cuda()
 
     lr = cfg.TRAIN.LEARNING_RATE
     lr = args.lr
@@ -290,12 +290,6 @@ if __name__ == '__main__':
         if 'pooling_mode' in checkpoint.keys():
             cfg.POOLING_MODE = checkpoint['pooling_mode']
         print("loaded checkpoint %s" % (load_name))
-
-    if args.mGPUs:
-        fasterRCNN = nn.DataParallel(fasterRCNN)
-
-    if args.cuda:
-        fasterRCNN.cuda()
 
     iters_per_epoch = int(train_size / args.batch_size)
 
@@ -339,7 +333,7 @@ if __name__ == '__main__':
                 if step > 0:
                     loss_temp /= args.disp_interval
 
-                if args.mGPUs:
+                if cfg.MGPU:
                     loss_rpn_cls = rpn_loss_cls.mean().data[0]
                     loss_rpn_box = rpn_loss_box.mean().data[0]
                     loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
@@ -373,7 +367,7 @@ if __name__ == '__main__':
                 loss_temp = 0
                 start = time.time()
 
-        if args.mGPUs:
+        if cfg.MGPU:
             save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
             save_checkpoint({
                 'session': args.session,

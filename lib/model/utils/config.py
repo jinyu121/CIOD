@@ -301,6 +301,11 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+# CIOD
+__C.CIOD = edict()
+__C.CIOD.TOTAL_CLS = 20
+__C.CIOD.GROUPS = 4
+
 import pdb
 
 
