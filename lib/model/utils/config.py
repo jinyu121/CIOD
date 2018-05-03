@@ -21,6 +21,15 @@ __C.TRAIN = edict()
 # Initial learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
 
+# Learning rate decay frequency
+__C.TRAIN.LEARNING_RATE_DECAY_STEP = 5
+
+# Learning rate decay amount
+__C.TRAIN.LEARNING_RATE_DECAY_GAMMA = 0.1
+
+# Training epoches
+__C.TRAIN.MAX_EPOCH = 100
+
 # Momentum
 __C.TRAIN.MOMENTUM = 0.9
 
