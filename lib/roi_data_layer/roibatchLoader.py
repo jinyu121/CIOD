@@ -5,22 +5,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import torch.utils.data as data
-from PIL import Image
+import numpy as np
 import torch
+import torch.utils.data as data
 
 from model.utils.config import cfg
-from roi_data_layer.minibatch import get_minibatch, get_minibatch
-from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
-
-import numpy as np
-import random
-import time
-import pdb
+from roi_data_layer.minibatch import get_minibatch
 
 
 class roibatchLoader(data.Dataset):
-    def __init__(self, roidb, ratio_list, ratio_index, batch_size, num_classes, training=True, normalize=None):
+    def __init__(self, roidb, ratio_list, ratio_index, batch_size, num_classes, training=True, normalize=None,
+                 shuffle=True):
         self._roidb = roidb
         self._num_classes = num_classes
         # we make the height of image consistent to trim_height, trim_width
@@ -33,6 +28,7 @@ class roibatchLoader(data.Dataset):
         self.ratio_index = ratio_index
         self.batch_size = batch_size
         self.data_size = len(self.ratio_list)
+        self.shuffle = shuffle
 
         # given the ratio_list, we want to make the ratio same for each batch.
         self.ratio_list_batch = torch.Tensor(self.data_size).zero_()
@@ -69,7 +65,8 @@ class roibatchLoader(data.Dataset):
         # we need to random shuffle the bounding box.
         data_height, data_width = data.size(1), data.size(2)
         if self.training:
-            np.random.shuffle(blobs['gt_boxes'])
+            if self.shuffle:
+                np.random.shuffle(blobs['gt_boxes'])
             gt_boxes = torch.from_numpy(blobs['gt_boxes'])
 
             ########################################################

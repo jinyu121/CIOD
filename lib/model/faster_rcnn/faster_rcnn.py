@@ -57,7 +57,7 @@ class _fasterRCNN(nn.Module):
             rois_inside_ws = Variable(rois_inside_ws.view(-1, rois_inside_ws.size(2)))
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
         else:
-            rois_label = None
+            rois_label = 0
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
@@ -109,7 +109,8 @@ class _fasterRCNN(nn.Module):
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rois_label, (rpn_loss_cls, rpn_loss_bbox, RCNN_loss_bbox, cls_score)
+        return rois, cls_prob, bbox_pred, rois_label, (
+            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_bbox, cls_score, pooled_feat)
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):

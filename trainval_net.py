@@ -7,12 +7,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import _init_paths
-
 import argparse
 import os
 import pprint
-import time
 from copy import deepcopy
 
 import numpy as np
@@ -142,7 +139,6 @@ if __name__ == '__main__':
                 if cfg.MGPU:
                     fasterRCNN = nn.DataParallel(fasterRCNN)
                 fasterRCNN.cuda()
-            b_fasterRCNN = deepcopy(fasterRCNN)  # Fake here
 
             params = []
             for key, value in dict(fasterRCNN.named_parameters()).items():
@@ -159,10 +155,12 @@ if __name__ == '__main__':
                 optimizer = torch.optim.Adam(params)
             elif args.optimizer == "sgd":
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
+        if b_fasterRCNN:
+            b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
         else:
-            # b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
             b_fasterRCNN = deepcopy(fasterRCNN)
-            change_require_gradient(b_fasterRCNN, False)
+        change_require_gradient(b_fasterRCNN, False)
+        # b_fasterRCNN.eval()
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
@@ -170,7 +168,6 @@ if __name__ == '__main__':
             # setting to train mode
             fasterRCNN.train()
             loss_temp = 0
-            start = time.time()
 
             if epoch % (cfg.TRAIN.LEARNING_RATE_DECAY_STEP + 1) == 0:
                 adjust_learning_rate(optimizer, cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA)
@@ -186,15 +183,14 @@ if __name__ == '__main__':
 
                 fasterRCNN.zero_grad()
                 rois, cls_prob, bbox_pred, rois_label, \
-                (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score) \
+                (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score, bbox_features) \
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                 if 0 == group:
                     RCNN_loss_cls = F.cross_entropy(cls_score[:, :now_cls_high], rois_label)
                 else:
-                    # Backup the old net
                     b_rois, b_cls_prob, b_bbox_pred, b_rois_label, \
-                    (b_rpn_loss_cls, b_rpn_loss_box, b_RCNN_loss_bbox, b_cls_score) \
+                    (b_rpn_loss_cls, b_rpn_loss_box, b_RCNN_loss_bbox, b_cls_score, b_bbox_features) \
                         = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                     new_label_mask = rois_label >= now_cls_low
@@ -226,7 +222,6 @@ if __name__ == '__main__':
                 optimizer.step()
 
                 if step % cfg.TRAIN.DISPLAY == 0:
-                    end = time.time()
                     if step > 0:
                         loss_temp /= cfg.TRAIN.DISPLAY
 
@@ -262,7 +257,6 @@ if __name__ == '__main__':
                             logger.scalar_summary(tag, value, step)
 
                     loss_temp = 0
-                    start = time.time()
 
             if (epoch + 1) % cfg.TRAIN.SAVE_INTERVAL == 0:
                 save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, group, epoch + 1))
@@ -273,9 +267,45 @@ if __name__ == '__main__':
                     'optimizer': optimizer.state_dict(),
                     'pooling_mode': cfg.POOLING_MODE,
                     'class_agnostic': args.class_agnostic,
+                    'cls_means': 0,
                 }, save_name)
                 tqdm.write('save model: {}'.format(save_name))
 
+        # ===== Representation learning =====
+        repr_labels = []
+        repr_features = []
+        class_means = np.zeros([bbox_features.shape[-1], imdb.num_classes], dtype=np.float)
+        # Make dataset (Notice the `a` here, means "[A]ll previous examples")
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group))
+        train_size = len(roidb)
+        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=True, shuffle=False)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
+        # Walk all examples
+        for data in tqdm(dataloader, desc="Iter"):
+            im_data.data.resize_(data[0].size()).copy_(data[0])
+            im_info.data.resize_(data[1].size()).copy_(data[1])
+            gt_boxes.data.resize_(data[2].size()).copy_(data[2])
+            num_boxes.data.resize_(data[3].size()).copy_(data[3])
+            fasterRCNN.zero_grad()
+            _, _, _, rois_label, (_, _, _, _, bbox_features) = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            fasterRCNN.zero_grad()
+            Dtmp = torch.t(bbox_features)
+            Dtot = Dtmp / torch.norm(Dtmp)
+            repr_features.append(Dtot.data.cpu().numpy())
+            repr_labels.append(rois_label.data.cpu().numpy())
+
+        # Make representation of each class
+        Dtot = np.concatenate(repr_features, axis=1)
+        labels = np.concatenate(repr_labels, axis=0).ravel()
+
+        for ith in range(now_cls_high):
+            ind_cl = np.where(labels == ith)[0]
+            D = Dtot[:, ind_cl]
+            tmp_mean = np.mean(D, axis=1)
+            class_means[:, ith] = tmp_mean / np.linalg.norm(tmp_mean)
+        assert not (np.any(np.isnan(class_means)) or np.any(np.isinf(class_means))), "Nan or Inf occurred!"
+
+        # Save the model
         save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}.pth'.format(args.session, group))
         save_checkpoint({
             'session': args.session,
@@ -284,5 +314,6 @@ if __name__ == '__main__':
             'optimizer': optimizer.state_dict(),
             'pooling_mode': cfg.POOLING_MODE,
             'class_agnostic': args.class_agnostic,
+            'cls_means': class_means,
         }, save_name)
         tqdm.write('save model: {}'.format(save_name))
