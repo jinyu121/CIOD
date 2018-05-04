@@ -7,6 +7,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import _init_paths
 import os
 import numpy as np
 import argparse
@@ -38,41 +39,24 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
     # Config the session ID for identify
-    parser.add_argument('--s', dest='session',
-                        help='training session ID',
-                        default=1, type=int)
+    parser.add_argument('--s', dest='session', default=1, type=int, help='training session ID')
     # Config the session
-    parser.add_argument('--dataset', dest='dataset',
-                        help='training dataset, in VOC format',
-                        default='2007', type=str)
+    parser.add_argument('--dataset', dest='dataset', default='2007', type=str, help='training dataset, in VOC format')
     # Config the net
-    parser.add_argument('--net', dest='net',
-                        help='vgg16, res101',
-                        default='res101', type=str)
-    parser.add_argument('--ls', dest='large_scale',
-                        help='whether use large imag scale',
-                        action='store_true')
-    parser.add_argument('--cag', dest='class_agnostic',
-                        help='whether perform class_agnostic bbox regression',
-                        action='store_true')
+    parser.add_argument('--net', dest='net', default='res101', type=str, help='vgg16, res101')
+    parser.add_argument('--ls', dest='large_scale', action='store_true', help='whether use large imag scale')
+    parser.add_argument('--cag', dest='class_agnostic', action='store_true',
+                        help='whether perform class_agnostic bbox regression')
     # Config optimization
-    parser.add_argument('--o', dest='optimizer',
-                        help='training optimizer',
-                        default="sgd", type=str)
-    # Logging, saving and displaying
-    parser.add_argument('--use_tfboard', dest='use_tfboard',
-                        help='whether use tensorflow tensorboard',
-                        default=False, type=bool)
-    parser.add_argument('--nw', dest='num_workers',
-                        help='number of worker to load data',
-                        default=4, type=int)
-    parser.add_argument('--save_dir', dest='save_dir',
-                        help='directory to save models', default="results",
-                        nargs=argparse.REMAINDER)
+    parser.add_argument('--o', dest='optimizer', default="sgd", type=str, help='training optimizer')
+    # Logging, displaying and saving
+    parser.add_argument('--use_tfboard', dest='use_tfboard', default=False, type=bool,
+                        help='whether use tensorflow tensorboard')
+    parser.add_argument('--save_dir', dest='save_dir', nargs=argparse.REMAINDER, default="results",
+                        help='directory to save models')
+    parser.add_argument('--nw', dest='num_workers', default=16, type=int, help='number of worker to load data')
     # Other config override
-    parser.add_argument('--conf', dest='config_file',
-                        help='Other config(s) to override',
-                        type=str)
+    parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
     args = parser.parse_args()
     return args
 
@@ -92,9 +76,9 @@ if __name__ == '__main__':
 
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
     args.imdbval_name = "voc_{}_test".format(args.dataset)
-    cfg_from_file("cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net))
-    if args.conf:
-        cfg_from_file(args.conf)
+    cfg_from_file("cfgs/{}{}.yml".format(args.net, "_ls" if args.large_scale else ""))
+    if args.config_file:
+        cfg_from_file(args.config_file)
 
     cfg.CUDA = torch.cuda.is_available()
     cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
@@ -132,7 +116,7 @@ if __name__ == '__main__':
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS
 
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}".format(group))
         train_size = len(roidb)
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
 
@@ -176,8 +160,9 @@ if __name__ == '__main__':
             elif args.optimizer == "sgd":
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
         else:
-            b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
-            # b_fasterRCNN.freeze()
+            # b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
+            b_fasterRCNN = deepcopy(fasterRCNN)
+            (b_fasterRCNN.module if cfg.MGPU else fasterRCNN).freeze()
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
@@ -245,7 +230,7 @@ if __name__ == '__main__':
                         fg_cnt = torch.sum(rois_label.data.ne(0))
                         bg_cnt = rois_label.data.numel() - fg_cnt
 
-                    tqdm.write("[session {}] lr: {:.2}, loss: {:.4}, fg/bg=({}/{})"
+                    tqdm.write("[session {}] lr: {:.2}, loss: {:.4}, fg/bg=({}/{})\n"
                                "\t\t\trpn_cls: {:.4}, rpn_box: {:.4}, rcnn_cls: {:.4}, rcnn_box {:.4}".format(
                         args.session, lr, loss_temp, fg_cnt, bg_cnt,
                         loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
@@ -264,13 +249,25 @@ if __name__ == '__main__':
                     loss_temp = 0
                     start = time.time()
 
-            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, group, epoch))
-            save_checkpoint({
-                'session': args.session,
-                'epoch': epoch + 1,
-                'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'pooling_mode': cfg.POOLING_MODE,
-                'class_agnostic': args.class_agnostic,
-            }, save_name)
-            tqdm.write('save model: {}'.format(save_name))
+            if (epoch + 1) % cfg.TRAIN.SAVE_INTERVAL == 0:
+                save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, group, epoch + 1))
+                save_checkpoint({
+                    'session': args.session,
+                    'epoch': epoch + 1,
+                    'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'pooling_mode': cfg.POOLING_MODE,
+                    'class_agnostic': args.class_agnostic,
+                }, save_name)
+                tqdm.write('save model: {}'.format(save_name))
+
+        save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}.pth'.format(args.session, group))
+        save_checkpoint({
+            'session': args.session,
+            'epoch': cfg.TRAIN.MAX_EPOCH,
+            'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'pooling_mode': cfg.POOLING_MODE,
+            'class_agnostic': args.class_agnostic,
+        }, save_name)
+        tqdm.write('save model: {}'.format(save_name))

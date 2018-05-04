@@ -136,3 +136,7 @@ class _fasterRCNN(nn.Module):
     def create_architecture(self):
         self._init_modules()
         self._init_weights()
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad = False
