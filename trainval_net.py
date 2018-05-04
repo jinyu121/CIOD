@@ -8,29 +8,29 @@ from __future__ import division
 from __future__ import print_function
 
 import _init_paths
-import os
-import numpy as np
+
 import argparse
+import os
 import pprint
 import time
 from copy import deepcopy
 
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
-import torch
-from torch.autograd import Variable
-import torch.nn as nn
-
-from torch.utils.data.sampler import Sampler
-
 from datasets.samplers.rcnnsampler import RcnnSampler
-from roi_data_layer.roidb import combined_roidb
-from roi_data_layer.roibatchLoader import roibatchLoader
+from model.faster_rcnn.resnet import resnet
+from model.faster_rcnn.vgg16 import vgg16
 from model.utils.config import cfg, cfg_from_file
 from model.utils.net_utils import adjust_learning_rate, save_checkpoint, clip_gradient
-
-from model.faster_rcnn.vgg16 import vgg16
-from model.faster_rcnn.resnet import resnet
+from model.utils.net_utils import change_require_gradient, heat_exp
+from roi_data_layer.roibatchLoader import roibatchLoader
+from roi_data_layer.roidb import combined_roidb
 
 
 def parse_args():
@@ -113,8 +113,8 @@ if __name__ == '__main__':
     b_fasterRCNN = None  # The backup net
 
     for group in trange(cfg.CIOD.GROUPS, desc="Group"):
-        now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS
-        now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS
+        now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
+        now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
         imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}".format(group))
         train_size = len(roidb)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
         else:
             # b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
             b_fasterRCNN = deepcopy(fasterRCNN)
-            (b_fasterRCNN.module if cfg.MGPU else fasterRCNN).freeze()
+            change_require_gradient(b_fasterRCNN, False)
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
@@ -185,21 +185,36 @@ if __name__ == '__main__':
                 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
                 fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, \
-                rpn_loss_cls, rpn_loss_box, \
-                RCNN_loss_cls, RCNN_loss_bbox, \
-                rois_label = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                rois, cls_prob, bbox_pred, rois_label, \
+                (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score) \
+                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+
                 if 0 == group:
-                    loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + \
-                           RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+                    RCNN_loss_cls = F.cross_entropy(cls_score[:, :now_cls_high], rois_label)
                 else:
-                    b_rois, b_cls_prob, b_bbox_pred, \
-                    b_rpn_loss_cls, b_rpn_loss_box, \
-                    b_RCNN_loss_cls, b_RCNN_loss_bbox, \
-                    b_rois_label = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-                    # Fake loss here
-                    loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + \
-                           RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+                    # Backup the old net
+                    b_rois, b_cls_prob, b_bbox_pred, b_rois_label, \
+                    (b_rpn_loss_cls, b_rpn_loss_box, b_RCNN_loss_bbox, b_cls_score) \
+                        = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+
+                    new_label_mask = rois_label >= now_cls_low
+                    # label_one_hot = make_one_hot(rois_label, now_cls_high)
+
+                    label_old = heat_exp(b_cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
+                    pred_old = heat_exp(cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
+
+                    loss_cls_old = F.kl_div(pred_old, label_old)
+
+                    label_new = rois_label.index_select(0, new_label_mask.nonzero().squeeze()) - now_cls_low
+                    pred_new = cls_score[:, now_cls_low:now_cls_high] \
+                        .index_select(0, new_label_mask.nonzero().squeeze())
+
+                    loss_cls_new = F.cross_entropy(pred_new, label_new)
+
+                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new
+
+                loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + \
+                       RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
 
                 loss_temp += loss.data[0]
 

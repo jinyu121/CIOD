@@ -3,8 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import os.path as osp
+
 import numpy as np
+import os.path as osp
 # `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
 
@@ -317,8 +318,8 @@ __C.CROP_RESIZE_WITH_MAX_POOL = True
 __C.CIOD = edict()
 __C.CIOD.TOTAL_CLS = 20
 __C.CIOD.GROUPS = 4
-
-import pdb
+__C.CIOD.TEMPERATURE = 2
+__C.CIOD.NEW_CLS_LOSS_SCALE = 2.
 
 
 def get_output_dir(imdb, weights_filename):

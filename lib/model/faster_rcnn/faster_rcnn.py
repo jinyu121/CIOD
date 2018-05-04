@@ -1,20 +1,16 @@
-import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import torchvision.models as models
-from torch.autograd import Variable
-import numpy as np
-from model.utils.config import cfg
-from model.rpn.rpn import _RPN
-from model.roi_pooling.modules.roi_pool import _RoIPooling
-from model.roi_crop.modules.roi_crop import _RoICrop
+
 from model.roi_align.modules.roi_align import RoIAlignAvg
+from model.roi_crop.modules.roi_crop import _RoICrop
+from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
-import time
-import pdb
-from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
+from model.rpn.rpn import _RPN
+from model.utils.config import cfg
+from model.utils.net_utils import _smooth_l1_loss, _affine_grid_gen
+from model.utils.net_utils import change_require_gradient
 
 
 class _fasterRCNN(nn.Module):
@@ -98,14 +94,14 @@ class _fasterRCNN(nn.Module):
 
         # compute object classification probability
         cls_score = self.RCNN_cls_score(pooled_feat)
-        cls_prob = F.softmax(cls_score)
+        cls_prob = F.softmax(cls_score, dim=-1)
 
         RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
 
         if self.training:
-            # classification loss
-            RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
+            # classification loss # We will calculate it outside the net
+            # RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
@@ -113,7 +109,7 @@ class _fasterRCNN(nn.Module):
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        return rois, cls_prob, bbox_pred, rois_label, (rpn_loss_cls, rpn_loss_bbox, RCNN_loss_bbox, cls_score)
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -138,5 +134,4 @@ class _fasterRCNN(nn.Module):
         self._init_weights()
 
     def freeze(self):
-        for param in self.parameters():
-            param.requires_grad = False
+        change_require_gradient(self, False)
