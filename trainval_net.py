@@ -20,6 +20,7 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
+import _init_paths
 from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
@@ -59,6 +60,7 @@ def parse_args():
 
 
 if __name__ == '__main__':
+    print(_init_paths.lib_path)
     args = parse_args()
 
     print('Called with args:')
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     if args.use_tfboard:
         from model.utils.logger import Logger
 
-        logger = Logger('./logs')  # Set the logger
+        logger = Logger(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))  # Set the logger
 
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
     args.imdbval_name = "voc_{}_test".format(args.dataset)
@@ -109,7 +111,7 @@ if __name__ == '__main__':
 
     b_fasterRCNN = None  # The backup net
 
-    for group in trange(cfg.CIOD.GROUPS, desc="Group"):
+    for group in trange(cfg.CIOD.GROUPS, desc="Group", leave=False):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
@@ -164,7 +166,7 @@ if __name__ == '__main__':
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
-        for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch"):
+        for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=False):
             # setting to train mode
             fasterRCNN.train()
             loss_temp = 0
@@ -174,7 +176,7 @@ if __name__ == '__main__':
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
             data_iter = iter(dataloader)
-            for step in trange(iters_per_epoch, desc="Iter"):
+            for step in trange(iters_per_epoch, desc="Iter", leave=False):
                 data = next(data_iter)
                 im_data.data.resize_(data[0].size()).copy_(data[0])
                 im_info.data.resize_(data[1].size()).copy_(data[1])
@@ -225,20 +227,12 @@ if __name__ == '__main__':
                     if step > 0:
                         loss_temp /= cfg.TRAIN.DISPLAY
 
-                    if cfg.MGPU:
-                        loss_rpn_cls = rpn_loss_cls.mean().data[0]
-                        loss_rpn_box = rpn_loss_box.mean().data[0]
-                        loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
-                        loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
-                        fg_cnt = torch.sum(rois_label.data.ne(0))
-                        bg_cnt = rois_label.data.numel() - fg_cnt
-                    else:
-                        loss_rpn_cls = rpn_loss_cls.data[0]
-                        loss_rpn_box = rpn_loss_box.data[0]
-                        loss_rcnn_cls = RCNN_loss_cls.data[0]
-                        loss_rcnn_box = RCNN_loss_bbox.data[0]
-                        fg_cnt = torch.sum(rois_label.data.ne(0))
-                        bg_cnt = rois_label.data.numel() - fg_cnt
+                    loss_rpn_cls = rpn_loss_cls.mean().data[0]
+                    loss_rpn_box = rpn_loss_box.mean().data[0]
+                    loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
+                    loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
+                    fg_cnt = torch.sum(rois_label.data.ne(0))
+                    bg_cnt = rois_label.data.numel() - fg_cnt
 
                     tqdm.write("[session {}] lr: {:.2}, loss: {:.4}, fg/bg=({}/{})\n"
                                "\t\t\trpn_cls: {:.4}, rpn_box: {:.4}, rcnn_cls: {:.4}, rcnn_box {:.4}".format(
@@ -281,7 +275,7 @@ if __name__ == '__main__':
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=True, shuffle=False)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
         # Walk all examples
-        for data in tqdm(dataloader, desc="Iter"):
+        for data in tqdm(dataloader, desc="Iter", leave=False):
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])
             gt_boxes.data.resize_(data[2].size()).copy_(data[2])
