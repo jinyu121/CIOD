@@ -86,7 +86,7 @@ if __name__ == '__main__':
     pprint.pprint(cfg)
     np.random.seed(cfg.RNG_SEED)
 
-    output_dir = os.path.join(args.save_dir, args.net, args.dataset)
+    output_dir = os.path.join(args.save_dir, str(args.session), args.net, args.dataset)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -253,7 +253,9 @@ if __name__ == '__main__':
                     loss_temp = 0
 
             if (epoch + 1) % cfg.TRAIN.SAVE_INTERVAL == 0:
-                save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, group, epoch + 1))
+                save_name = os.path.join(
+                    output_dir,
+                    'faster_rcnn_{}_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, group, epoch + 1))
                 save_checkpoint({
                     'session': args.session,
                     'epoch': epoch + 1,
@@ -300,7 +302,9 @@ if __name__ == '__main__':
         assert not (np.any(np.isnan(class_means)) or np.any(np.isinf(class_means))), "Nan or Inf occurred!"
 
         # Save the model
-        save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}.pth'.format(args.session, group))
+        save_name = os.path.join(
+            output_dir,
+            'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, group))
         save_checkpoint({
             'session': args.session,
             'epoch': cfg.TRAIN.MAX_EPOCH,
