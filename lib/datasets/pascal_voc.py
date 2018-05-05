@@ -1,33 +1,31 @@
-from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import print_function
+
+import os
+import pickle
+import subprocess
+import uuid
+import xml.etree.ElementTree as ET
+
+# import PIL
+import numpy as np
+import scipy.io as sio
+import scipy.sparse
+from tqdm import tqdm
+
+# TODO: make fast_rcnn irrelevant
+# >>>> obsolete, because it depends on sth outside of this project
+from model.utils.config import cfg
+from . import ds_utils
+from .imdb import imdb
+from .voc_eval import voc_eval
+
 # --------------------------------------------------------
 # Fast R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
 # --------------------------------------------------------
-
-import xml.dom.minidom as minidom
-
-import os
-# import PIL
-import numpy as np
-import scipy.sparse
-import subprocess
-import math
-import glob
-import uuid
-import scipy.io as sio
-import xml.etree.ElementTree as ET
-import pickle
-from .imdb import imdb
-from .imdb import ROOT_DIR
-from . import ds_utils
-from .voc_eval import voc_eval
-from tqdm import tqdm
-# TODO: make fast_rcnn irrelevant
-# >>>> obsolete, because it depends on sth outside of this project
-from model.utils.config import cfg
 
 try:
     xrange  # Python 2
@@ -332,6 +330,7 @@ class pascal_voc(imdb):
         tqdm.write('Recompute with `./tools/reval.py --matlab ...` for your paper.')
         tqdm.write('-- Thanks, The Management')
         tqdm.write('--------------------------------------------------------------')
+        return aps
 
     def _do_matlab_eval(self, output_dir='output'):
         tqdm.write('-----------------------------------------------------')
@@ -350,7 +349,7 @@ class pascal_voc(imdb):
 
     def evaluate_detections(self, all_boxes, output_dir):
         self._write_voc_results_file(all_boxes)
-        self._do_python_eval(output_dir)
+        aps = self._do_python_eval(output_dir)
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:
@@ -359,6 +358,7 @@ class pascal_voc(imdb):
                     continue
                 filename = self._get_voc_results_file_template().format(cls)
                 os.remove(filename)
+        return aps
 
     def competition_mode(self, on):
         if on:

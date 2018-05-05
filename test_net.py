@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     max_per_image = 100
     thresh = 0.05 if args.vis else 0.0
-
+    aps = []
     for group in trange(cfg.CIOD.GROUPS, desc="Group", leave=False):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
@@ -227,4 +227,23 @@ if __name__ == '__main__':
             pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
         tqdm.write('Evaluating detections')
-        imdb.evaluate_detections(all_boxes, output_dir)
+        ap = imdb.evaluate_detections(all_boxes, output_dir)
+        aps.append(ap)
+
+    print("=" * 10, "Result Summary (mAP, AP, %)", "=" * 10)
+    for now_group, x in enumerate(aps):
+        now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
+        now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
+        print("{:.2f} :".format(np.mean(x) * 100), end="\t")
+        for y in x[:now_classes_high]:
+            print("{:.2f}\t".format(y * 100), end="")
+        print()
+
+    print("=" * 10, "Group Summary (mAP, AP, %)", "=" * 10)
+    for now_group in range(cfg.CIOD.GROUPS):
+        now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
+        now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
+        ans = []
+        for x in range(now_group, cfg.CIOD.GROUPS):
+            ans.append(np.mean(aps[x][now_classes_low:now_classes_high]) * 100.)
+        print("Group {:>2} :".format(now_group), "->".join(map("\t{:.2f}\t".format, ans)))

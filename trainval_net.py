@@ -315,3 +315,5 @@ if __name__ == '__main__':
             'cls_means': class_means,
         }, save_name)
         tqdm.write('save model: {}'.format(save_name))
+
+    print("All Done")
