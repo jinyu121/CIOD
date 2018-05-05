@@ -136,11 +136,13 @@ if __name__ == '__main__':
                 raise KeyError("network is not defined")
 
             fasterRCNN.create_architecture()
+            b_fasterRCNN = deepcopy(fasterRCNN)
 
             if cfg.CUDA:
                 if cfg.MGPU:
                     fasterRCNN = nn.DataParallel(fasterRCNN)
                 fasterRCNN.cuda()
+                b_fasterRCNN.cuda()
 
             params = []
             for key, value in dict(fasterRCNN.named_parameters()).items():
@@ -157,12 +159,10 @@ if __name__ == '__main__':
                 optimizer = torch.optim.Adam(params)
             elif args.optimizer == "sgd":
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
-        if b_fasterRCNN:
-            b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
-        else:
-            b_fasterRCNN = deepcopy(fasterRCNN)
+
+        # Get the weights from the previous group
+        b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
         change_require_gradient(b_fasterRCNN, False)
-        # b_fasterRCNN.eval()
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
