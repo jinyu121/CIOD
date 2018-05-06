@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument('--ls', dest='large_scale', action='store_true', help='whether use large imag scale')
     parser.add_argument('--cag', dest='class_agnostic', action='store_true',
                         help='whether perform class_agnostic bbox regression')
+    parser.add_argument('--no_repr', dest='no_repr', action='store_true',
+                        help='Do not use representation classification')
     # Logging, displaying and saving
     parser.add_argument('--load_dir', dest='load_dir', type=str, help='directory to load models', default="results")
     parser.add_argument('--vis', dest='vis', action='store_true', help='visualization mode')
@@ -155,14 +157,17 @@ if __name__ == '__main__':
             (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score, bbox_features) \
                 = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-            # Representation classification
-            scores = torch.zeros_like(cls_prob.data)
-            if cfg.CUDA:
-                scores = scores.cuda()
-            features = torch.t(bbox_features)
-            features = features / torch.norm(features)
-            scores[0, :, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
-            scores = F.softmax(Variable(scores), dim=-1).data
+            if args.no_repr:
+                scores = cls_prob.data
+            else:
+                # Representation classification
+                scores = torch.zeros_like(cls_prob.data)
+                if cfg.CUDA:
+                    scores = scores.cuda()
+                features = torch.t(bbox_features)
+                features = features / torch.norm(features)
+                scores[0, :, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
+                scores = F.softmax(Variable(scores), dim=-1).data
 
             boxes = rois.data[:, :, 1:5]
 
@@ -257,4 +262,4 @@ if __name__ == '__main__':
         ans = []
         for x in range(now_group, cfg.CIOD.GROUPS):
             ans.append(np.mean(aps[x][now_classes_low:now_classes_high]) * 100.)
-        print("Group {:>2} :".format(now_group), "->".join(map("\t{:.2f}\t".format, ans)))
+        print("Group {:>2} :".format(now_group), "\t->\t".join(map("{:.2f}".format, ans)))
