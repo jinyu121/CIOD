@@ -15,6 +15,7 @@ import pprint
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.autograd import Variable
 from tqdm import tqdm, trange
 
@@ -25,7 +26,7 @@ from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
 from model.utils.config import cfg, cfg_from_file, get_output_dir
-from model.utils.net_utils import vis_detections
+from model.utils.net_utils import vis_detections, cdist
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -128,9 +129,11 @@ if __name__ == '__main__':
         tqdm.write("load checkpoint {}".format(load_name))
         checkpoint = torch.load(load_name)
         fasterRCNN.load_state_dict(checkpoint['model'])
-        class_means = checkpoint['cls_means']
+        class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
         cfg.POOLING_MODE = checkpoint['pooling_mode']
         tqdm.write('load model successfully!')
+        if cfg.CUDA:
+            class_means = class_means.cuda()
 
         num_images = len(imdb.image_index)
         all_boxes = [[[] for _ in range(num_images)] for _ in range(imdb.num_classes)]
@@ -152,7 +155,15 @@ if __name__ == '__main__':
             (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score, bbox_features) \
                 = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-            scores = cls_prob.data
+            # Representation classification
+            scores = torch.zeros_like(cls_prob.data)
+            if cfg.CUDA:
+                scores = scores.cuda()
+            features = torch.t(bbox_features)
+            features = features / torch.norm(features)
+            scores[0, :, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
+            scores = F.softmax(Variable(scores), dim=-1).data
+
             boxes = rois.data[:, :, 1:5]
 
             if cfg.TEST.BBOX_REG:
