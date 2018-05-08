@@ -171,7 +171,7 @@ if __name__ == '__main__':
             fasterRCNN.train()
             loss_temp = 0
 
-            if epoch % (cfg.TRAIN.LEARNING_RATE_DECAY_STEP + 1) == 0:
+            if epoch % (cfg.TRAIN.LEARNING_RATE_DECAY_STEP) == 0 and epoch > 0:
                 adjust_learning_rate(optimizer, cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA)
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
@@ -184,34 +184,54 @@ if __name__ == '__main__':
                 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
                 fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, rois_label, \
-                (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score, bbox_features) \
-                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                rois, cls_score, bbox_pred, pooled_feat, \
+                rpn_cls_score, rpn_label, rpn_feature, \
+                rpn_loss_bbox, \
+                rois_label, \
+                RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                 if 0 == group:
-                    RCNN_loss_cls = F.cross_entropy(cls_score[:, :now_cls_high], rois_label)
+                    # RPN binary classification loss
+                    rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
+
+                    # Classification loss
+                    cls_prob = F.softmax(cls_score[..., :now_cls_high])
+                    RCNN_loss_cls = F.cross_entropy(cls_prob, rois_label)
                 else:
-                    b_rois, b_cls_prob, b_bbox_pred, b_rois_label, \
-                    (b_rpn_loss_cls, b_rpn_loss_box, b_RCNN_loss_bbox, b_cls_score, b_bbox_features) \
-                        = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                    b_rois, b_cls_score, b_bbox_pred, b_pooled_feat, \
+                    b_rpn_cls_score, b_rpn_label, b_rpn_feature, \
+                    b_rpn_loss_bbox, \
+                    b_rois_label, \
+                    b_RCNN_loss_bbox = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-                    new_label_mask = rois_label >= now_cls_low
-                    # label_one_hot = make_one_hot(rois_label, now_cls_high)
+                    # RPN binary classification loss
+                    rpn_loss_cls_old = F.mse_loss(rpn_cls_score, b_rpn_cls_score)  # To make change small?
+                    rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
+                    rpn_loss_cls = rpn_loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * rpn_loss_cls_new
 
+                    # Classification loss
+                    new_label_mask = (rois_label >= now_cls_low).nonzero().squeeze()
+                    zero_label_mask = (rois_label == 0).nonzero().squeeze()
+
+                    # For old class, use knowledge distillation with KLDivLoss
                     label_old = heat_exp(b_cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
                     pred_old = heat_exp(cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
+                    loss_cls_old = F.kl_div(torch.log(pred_old), label_old)
 
-                    loss_cls_old = F.kl_div(pred_old, label_old)
-
-                    label_new = rois_label.index_select(0, new_label_mask.nonzero().squeeze()) - now_cls_low
-                    pred_new = cls_score[:, now_cls_low:now_cls_high] \
-                        .index_select(0, new_label_mask.nonzero().squeeze())
-
+                    # For new classes, use cross entropy loss
+                    label_new = rois_label.index_select(0, new_label_mask) - now_cls_low
+                    pred_new = cls_score[:, now_cls_low:now_cls_high].index_select(0, new_label_mask)
                     loss_cls_new = F.cross_entropy(pred_new, label_new)
 
-                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new
+                    # Process class 0 (__background__)
+                    label_zero = rois_label.index_select(0, zero_label_mask)
+                    pred_zero = cls_score[:, now_cls_low:now_cls_high].index_select(0, zero_label_mask)
+                    loss_cls_zero = F.cross_entropy(pred_zero, label_zero)
 
-                loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + \
+                    # Total classification loss
+                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * (loss_cls_new + loss_cls_zero)
+
+                loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + \
                        RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
 
                 loss_temp += loss.data[0]
@@ -228,7 +248,7 @@ if __name__ == '__main__':
                         loss_temp /= cfg.TRAIN.DISPLAY
 
                     loss_rpn_cls = rpn_loss_cls.mean().data[0]
-                    loss_rpn_box = rpn_loss_box.mean().data[0]
+                    loss_rpn_box = rpn_loss_bbox.mean().data[0]
                     loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
                     loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
                     fg_cnt = torch.sum(rois_label.data.ne(0))
@@ -270,22 +290,28 @@ if __name__ == '__main__':
         # ===== Representation learning =====
         repr_labels = []
         repr_features = []
-        class_means = np.zeros([bbox_features.shape[-1], imdb.num_classes], dtype=np.float)
+        class_means = np.zeros([pooled_feat.shape[-1], imdb.num_classes], dtype=np.float)
         # Make dataset (Notice the `a` here, means "[A]ll previous examples")
         imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group))
         train_size = len(roidb)
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=True, shuffle=False)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
         # Walk all examples
-        for data in tqdm(dataloader, desc="Iter", leave=False):
+        data_iter = iter(dataloader)
+        for step in trange(iters_per_epoch, desc="Iter", leave=False):
+            data = next(data_iter)
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])
             gt_boxes.data.resize_(data[2].size()).copy_(data[2])
             num_boxes.data.resize_(data[3].size()).copy_(data[3])
             fasterRCNN.zero_grad()
-            _, _, _, rois_label, (_, _, _, _, bbox_features) = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            rois, cls_score, bbox_pred, pooled_feat, \
+            rpn_cls_score, rpn_label, rpn_feature, \
+            rpn_loss_bbox, \
+            rois_label, \
+            RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
             fasterRCNN.zero_grad()
-            Dtmp = torch.t(bbox_features)
+            Dtmp = torch.t(pooled_feat)
             Dtot = Dtmp / torch.norm(Dtmp)
             repr_features.append(Dtot.data.cpu().numpy())
             repr_labels.append(rois_label.data.cpu().numpy())

@@ -45,7 +45,8 @@ class _fasterRCNN(nn.Module):
         base_feat = self.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
-        rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
+        rois, rpn_feature, rpn_cls_score, rpn_label, rpn_loss_bbox = self.RCNN_rpn(
+            base_feat, im_info, gt_boxes, num_boxes)
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
@@ -61,7 +62,6 @@ class _fasterRCNN(nn.Module):
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
-            rpn_loss_cls = 0
             rpn_loss_bbox = 0
 
         rois = Variable(rois)
@@ -94,23 +94,20 @@ class _fasterRCNN(nn.Module):
 
         # compute object classification probability
         cls_score = self.RCNN_cls_score(pooled_feat)
-        cls_prob = F.softmax(cls_score, dim=-1)
 
-        RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
 
         if self.training:
-            # classification loss # We will calculate it outside the net
-            # RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
-
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
 
-        cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rois_label, (
-            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_bbox, cls_score, pooled_feat)
+        return rois, cls_score, bbox_pred, pooled_feat, \
+               rpn_cls_score, rpn_label, rpn_feature, \
+               rpn_loss_bbox, \
+               rois_label, \
+               RCNN_loss_bbox
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
