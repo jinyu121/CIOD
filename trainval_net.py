@@ -57,6 +57,9 @@ def parse_args():
     parser.add_argument('--nw', dest='num_workers', default=16, type=int, help='number of worker to load data')
     # Other config override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
+    # Resume
+    parser.add_argument('--resume', dest='resume', action="store_true", help='Resume training')
+    parser.add_argument('--resume_group', dest='resume_group', type=int, default=0, help='Resume last group')
     args = parser.parse_args()
     return args
 
@@ -117,7 +120,12 @@ if __name__ == '__main__':
 
     b_fasterRCNN = None  # The backup net
 
-    for group in trange(cfg.CIOD.GROUPS, desc="Group", leave=False):
+    if args.resume:
+        start_group = args.resume_group
+    else:
+        start_group = 0
+
+    for group in trange(start_group, cfg.CIOD.GROUPS, desc="Group", leave=False):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
@@ -132,7 +140,7 @@ if __name__ == '__main__':
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch, num_workers=args.num_workers)
 
-        if 0 == group:  # Foe the first group, initialize the network here.
+        if 0 == group or args.resume:  # Foe the first group, initialize the network here.
             if args.net == 'vgg16':
                 fasterRCNN = vgg16(imdb.classes, pretrained=True, class_agnostic=args.class_agnostic)
             elif args.net.startswith('res'):
@@ -166,6 +174,20 @@ if __name__ == '__main__':
             elif args.optimizer == "sgd":
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
+            if args.resume:
+                load_name = os.path.join(
+                    output_dir,
+                    'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, args.resume_group - 1))
+                checkpoint = torch.load(load_name)
+                fasterRCNN.load_state_dict(checkpoint['model'])
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                lr = optimizer.param_groups[0]['lr']
+                if 'pooling_mode' in checkpoint.keys():
+                    cfg.POOLING_MODE = checkpoint['pooling_mode']
+                class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
+
+        args.resume = False
+
         # Get the weights from the previous group
         b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
         change_require_gradient(b_fasterRCNN, False)
@@ -174,9 +196,10 @@ if __name__ == '__main__':
 
         tot_step = 0
 
+        # setting to train mode
+        fasterRCNN.train()
+
         for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=False):
-            # setting to train mode
-            fasterRCNN.train()
             loss_temp = 0
 
             if epoch % (cfg.TRAIN.LEARNING_RATE_DECAY_STEP) == 0 and epoch > 0:
