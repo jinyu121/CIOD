@@ -48,6 +48,7 @@ def parse_args():
     # Config optimization
     parser.add_argument('--o', dest='optimizer', default="sgd", type=str, help='training optimizer')
     parser.add_argument('--bs', dest='batch_size', default=0, type=int, help='Batch size')
+    parser.add_argument('--epoch', dest='epoch', default=0, type=int, help='Train epoch(s)')
     # Logging, displaying and saving
     parser.add_argument('--use_tfboard', dest='use_tfboard', action="store_true",
                         help='whether use tensorflow tensorboard')
@@ -81,6 +82,8 @@ if __name__ == '__main__':
         cfg_from_file(args.config_file)
     if args.batch_size:
         cfg_from_list(["TRAIN.BATCH_SIZE", args.batch_size])
+    if args.epoch:
+        cfg_from_list(["TRAIN.MAX_EPOCH", args.epoch])
 
     cfg.CUDA = torch.cuda.is_available()
     cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
