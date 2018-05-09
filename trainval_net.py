@@ -24,7 +24,7 @@ import _init_paths
 from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
-from model.utils.config import cfg, cfg_from_file
+from model.utils.config import cfg, cfg_from_file, cfg_from_list
 from model.utils.net_utils import adjust_learning_rate, save_checkpoint, clip_gradient
 from model.utils.net_utils import change_require_gradient, heat_exp
 from roi_data_layer.roibatchLoader import roibatchLoader
@@ -47,8 +47,9 @@ def parse_args():
                         help='whether perform class_agnostic bbox regression')
     # Config optimization
     parser.add_argument('--o', dest='optimizer', default="sgd", type=str, help='training optimizer')
+    parser.add_argument('--bs', dest='batch_size', default=0, type=int, help='Batch size')
     # Logging, displaying and saving
-    parser.add_argument('--use_tfboard', dest='use_tfboard', default=False, type=bool,
+    parser.add_argument('--use_tfboard', dest='use_tfboard', action="store_true",
                         help='whether use tensorflow tensorboard')
     parser.add_argument('--save_dir', dest='save_dir', nargs=argparse.REMAINDER, default="results",
                         help='directory to save models')
@@ -78,6 +79,8 @@ if __name__ == '__main__':
     cfg_from_file("cfgs/{}{}.yml".format(args.net, "_ls" if args.large_scale else ""))
     if args.config_file:
         cfg_from_file(args.config_file)
+    if args.batch_size:
+        cfg_from_list(["TRAIN.BATCH_SIZE", args.batch_size])
 
     cfg.CUDA = torch.cuda.is_available()
     cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
