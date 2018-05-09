@@ -169,6 +169,8 @@ if __name__ == '__main__':
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
+        tot_step = 0
+
         for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=False):
             # setting to train mode
             fasterRCNN.train()
@@ -179,7 +181,8 @@ if __name__ == '__main__':
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
             data_iter = iter(dataloader)
-            for step in trange(iters_per_epoch, desc="Iter", leave=False):
+            for _ in trange(iters_per_epoch, desc="Iter", leave=False):
+                tot_step += 1
                 data = next(data_iter)
                 im_data.data.resize_(data[0].size()).copy_(data[0])
                 im_info.data.resize_(data[1].size()).copy_(data[1])
@@ -246,8 +249,8 @@ if __name__ == '__main__':
                     clip_gradient(fasterRCNN, 10.)
                 optimizer.step()
 
-                if step % cfg.TRAIN.DISPLAY == 0:
-                    if step > 0:
+                if tot_step % cfg.TRAIN.DISPLAY == 0:
+                    if tot_step > 0:
                         loss_temp /= cfg.TRAIN.DISPLAY
 
                     loss_rpn_cls = rpn_loss_cls.mean().data[0]
@@ -268,10 +271,11 @@ if __name__ == '__main__':
                             'loss_rpn_cls': loss_rpn_cls,
                             'loss_rpn_box': loss_rpn_box,
                             'loss_rcnn_cls': loss_rcnn_cls,
-                            'loss_rcnn_box': loss_rcnn_box
+                            'loss_rcnn_box': loss_rcnn_box,
+                            'learning_rate': lr
                         }
                         for tag, value in info.items():
-                            logger.scalar_summary(tag, value, step)
+                            logger.scalar_summary("Group{}/{}".format(group, tag), value, tot_step)
 
                     loss_temp = 0
 
@@ -301,7 +305,7 @@ if __name__ == '__main__':
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
         # Walk all examples
         data_iter = iter(dataloader)
-        for step in trange(iters_per_epoch, desc="Iter", leave=False):
+        for _ in trange(iters_per_epoch, desc="Iter", leave=False):
             data = next(data_iter)
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])

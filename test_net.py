@@ -107,7 +107,8 @@ if __name__ == '__main__':
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "testStep{}".format(group), training=False)
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group),
+                                                              training=False)
         imdb.competition_mode(on=True)
 
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
@@ -153,20 +154,22 @@ if __name__ == '__main__':
             gt_boxes.data.resize_(data[2].size()).copy_(data[2])
             num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
-            rois, cls_prob, bbox_pred, rois_label, \
-            (rpn_loss_cls, rpn_loss_box, RCNN_loss_bbox, cls_score, bbox_features) \
-                = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            rois, cls_score, bbox_pred, pooled_feat, \
+            rpn_cls_score, rpn_label, rpn_feature, \
+            rpn_loss_bbox, \
+            rois_label, \
+            RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
             if args.no_repr:
-                scores = cls_prob.data
+                scores = F.softmax(cls_score).data
             else:
                 # Representation classification
-                scores = torch.zeros_like(cls_prob.data)
+                scores = torch.zeros_like(cls_score.data)
                 if cfg.CUDA:
                     scores = scores.cuda()
-                features = torch.t(bbox_features)
+                features = torch.t(pooled_feat)
                 features = features / torch.norm(features)
-                scores[0, :, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
+                scores[:, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
                 scores = F.softmax(Variable(scores), dim=-1).data
 
             boxes = rois.data[:, :, 1:5]
@@ -246,7 +249,7 @@ if __name__ == '__main__':
         ap = imdb.evaluate_detections(all_boxes, output_dir)
         aps.append(ap)
 
-    print("=" * 10, "Result Summary (mAP, AP, %)", "=" * 10)
+    print("=" * 10, "RCNN Result Summary (mAP, AP, %)", "=" * 10)
     for now_group, x in enumerate(aps):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
@@ -255,7 +258,7 @@ if __name__ == '__main__':
             print("{:.2f}\t".format(y * 100), end="")
         print()
 
-    print("=" * 10, "Group Summary (mAP, AP, %)", "=" * 10)
+    print("=" * 10, "RCNN Group Summary (mAP, AP, %)", "=" * 10)
     for now_group in range(cfg.CIOD.GROUPS):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
