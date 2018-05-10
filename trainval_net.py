@@ -186,6 +186,7 @@ if __name__ == '__main__':
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
             if args.resume:
+                optimizer.load_state_dict(checkpoint['optimizer'])
                 lr = optimizer.param_groups[0]['lr']
                 if 'pooling_mode' in checkpoint.keys():
                     cfg.POOLING_MODE = checkpoint['pooling_mode']
@@ -292,9 +293,9 @@ if __name__ == '__main__':
                     fg_cnt = torch.sum(rois_label.data.ne(0))
                     bg_cnt = rois_label.data.numel() - fg_cnt
 
-                    tqdm.write("[session {}] lr: {:.2}, loss: {:.4}, fg/bg=({}/{})\n"
+                    tqdm.write("[S{} G{}] lr: {:.2}, loss: {:.4}, fg/bg=({}/{})\n"
                                "\t\t\trpn_cls: {:.4}, rpn_box: {:.4}, rcnn_cls: {:.4}, rcnn_box {:.4}".format(
-                        args.session, lr, loss_temp, fg_cnt, bg_cnt,
+                        args.session, group, lr, loss_temp, fg_cnt, bg_cnt,
                         loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
 
                     if args.use_tfboard:
