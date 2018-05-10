@@ -75,9 +75,9 @@ if __name__ == '__main__':
     # torch.backends.cudnn.benchmark = True
 
     if args.use_tfboard:
-        from model.utils.logger import Logger
+        from tensorboardX import SummaryWriter
 
-        logger = Logger(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))  # Set the logger
+        logger = SummaryWriter(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))
 
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
     args.imdbval_name = "voc_{}_test".format(args.dataset)
@@ -305,7 +305,7 @@ if __name__ == '__main__':
                             'learning_rate': lr
                         }
                         for tag, value in info.items():
-                            logger.scalar_summary("Group{}/{}".format(group, tag), value, tot_step)
+                            logger.add_scalar("Group{}/{}".format(group, tag), value, tot_step)
 
                     loss_temp = 0
 
