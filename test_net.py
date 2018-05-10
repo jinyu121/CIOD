@@ -161,7 +161,8 @@ if __name__ == '__main__':
             RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
             if args.no_repr:
-                scores = F.softmax(cls_score).data
+                scores = F.softmax(cls_score)
+                cls_prob = scores.view(im_data.size(0), rois.size(1), -1).data
             else:
                 # Representation classification
                 scores = torch.zeros_like(cls_score.data)
@@ -171,6 +172,9 @@ if __name__ == '__main__':
                 features = features / torch.norm(features)
                 scores[:, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
                 scores = F.softmax(Variable(scores), dim=-1).data
+
+            if group != cfg.CIOD.GROUPS - 1:  # Tiny fix
+                scores[:, now_cls_high:] = 0
 
             boxes = rois.data[:, :, 1:5]
 
