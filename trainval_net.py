@@ -152,6 +152,13 @@ if __name__ == '__main__':
             fasterRCNN.create_architecture()
             b_fasterRCNN = deepcopy(fasterRCNN)
 
+            if args.resume:
+                load_name = os.path.join(
+                    output_dir,
+                    'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, args.resume_group - 1))
+                checkpoint = torch.load(load_name)
+                fasterRCNN.load_state_dict(checkpoint['model'])
+
             if cfg.CUDA:
                 if cfg.MGPU:
                     fasterRCNN = nn.DataParallel(fasterRCNN)
@@ -168,6 +175,7 @@ if __name__ == '__main__':
                     else:
                         params += [{'params': [value],
                                     'lr': lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+
             if args.optimizer == "adam":
                 lr = lr * 0.1
                 optimizer = torch.optim.Adam(params)
@@ -175,16 +183,11 @@ if __name__ == '__main__':
                 optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
             if args.resume:
-                load_name = os.path.join(
-                    output_dir,
-                    'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, args.resume_group - 1))
-                checkpoint = torch.load(load_name)
-                fasterRCNN.load_state_dict(checkpoint['model'])
-                optimizer.load_state_dict(checkpoint['optimizer'])
                 lr = optimizer.param_groups[0]['lr']
                 if 'pooling_mode' in checkpoint.keys():
                     cfg.POOLING_MODE = checkpoint['pooling_mode']
                 class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
+                tqdm.write("Resume from {}".format(load_name))
 
         args.resume = False
 
@@ -239,7 +242,7 @@ if __name__ == '__main__':
                     # RPN binary classification loss
                     rpn_loss_cls_old = F.mse_loss(rpn_cls_score, b_rpn_cls_score)  # To make change small?
                     rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
-                    rpn_loss_cls = rpn_loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * rpn_loss_cls_new
+                    rpn_loss_cls = rpn_loss_cls_old + cfg.CIOD.RPN_NEW_CLS_LOSS_SCALE * rpn_loss_cls_new
 
                     # Classification loss
                     new_label_mask = (rois_label >= now_cls_low).nonzero().squeeze()
