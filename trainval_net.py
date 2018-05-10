@@ -9,6 +9,7 @@ from __future__ import print_function
 
 import argparse
 import os
+import pickle
 import pprint
 from copy import deepcopy
 
@@ -361,7 +362,12 @@ if __name__ == '__main__':
             D = Dtot[:, ind_cl]
             tmp_mean = np.mean(D, axis=1)
             class_means[:, ith] = tmp_mean / np.linalg.norm(tmp_mean)
-        assert not (np.any(np.isnan(class_means)) or np.any(np.isinf(class_means))), "Nan or Inf occurred!"
+        if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
+            save_name = os.path.join(
+                output_dir,
+                'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
+            pickle.dump(class_means, open("foo.pkl", "wb"))
+            assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
 
         # Save the model
         save_name = os.path.join(
