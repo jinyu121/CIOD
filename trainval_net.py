@@ -119,6 +119,8 @@ if __name__ == '__main__':
     num_boxes = Variable(num_boxes)
     gt_boxes = Variable(gt_boxes)
 
+    class_means = np.zeros([2048, 21], dtype=np.float)
+
     b_fasterRCNN = None  # The backup net
 
     if args.resume:
@@ -324,16 +326,17 @@ if __name__ == '__main__':
                 }, save_name)
                 tqdm.write('save model: {}'.format(save_name))
 
-        # ===== Representation learning =====
+        tqdm.write("===== Representation learning {} =====".format(group))
         repr_labels = []
         repr_features = []
-        class_means = np.zeros([pooled_feat.shape[-1], imdb.num_classes], dtype=np.float)
+
         # Make dataset (Notice the `a` here, means "[A]ll previous examples")
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group))
-        train_size = len(roidb)
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=True, shuffle=False)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
-        # Walk all examples
+        # imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group))
+        # train_size = len(roidb)
+        # dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=True, shuffle=False)
+        # dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=2)
+
+        # Walk through all examples
         data_iter = iter(dataloader)
         for _ in trange(iters_per_epoch, desc="Iter", leave=False):
             data = next(data_iter)
@@ -355,13 +358,17 @@ if __name__ == '__main__':
 
         # Make representation of each class
         Dtot = np.concatenate(repr_features, axis=1)
-        labels = np.concatenate(repr_labels, axis=0).ravel()
+        labels = np.concatenate(repr_labels, axis=0)
+        labels = labels.ravel()
 
-        for ith in range(now_cls_high):
+        cls_sta = 0 if 0 == group else now_cls_low
+
+        for ith in range(cls_sta, now_cls_high):
             ind_cl = np.where(labels == ith)[0]
             D = Dtot[:, ind_cl]
             tmp_mean = np.mean(D, axis=1)
             class_means[:, ith] = tmp_mean / np.linalg.norm(tmp_mean)
+
         if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
             save_name = os.path.join(
                 output_dir,
