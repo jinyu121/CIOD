@@ -55,7 +55,7 @@ def parse_args():
                         help='whether use tensorflow tensorboard')
     parser.add_argument('--save_dir', dest='save_dir', nargs=argparse.REMAINDER, default="results",
                         help='directory to save models')
-    parser.add_argument('--nw', dest='num_workers', default=16, type=int, help='number of worker to load data')
+    parser.add_argument('--nw', dest='num_workers', default=32, type=int, help='number of worker to load data')
     # Other config override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
     # Resume
@@ -244,31 +244,38 @@ if __name__ == '__main__':
                     b_RCNN_loss_bbox = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                     # RPN binary classification loss
+                    # Less-forgetting Learning in Deep Neural Networks (Equ 1)
                     rpn_loss_cls_old = F.mse_loss(rpn_cls_score, b_rpn_cls_score)  # To make change small?
                     rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
                     rpn_loss_cls = rpn_loss_cls_old + cfg.CIOD.RPN_NEW_CLS_LOSS_SCALE * rpn_loss_cls_new
 
                     # Classification loss
-                    new_label_mask = (rois_label >= now_cls_low).nonzero().squeeze()
-                    zero_label_mask = (rois_label == 0).nonzero().squeeze()
+                    # For old class, use knowledge distillation with KLDivLoss
+                    # For new class, use cross entropy loss
+                    # Notice, he new group and old group shares the `__background__` class.
+
+                    index_old = list(range(now_cls_low))
+                    index_new = [0] + list(range(now_cls_low, now_cls_high))
 
                     # For old class, use knowledge distillation with KLDivLoss
-                    label_old = heat_exp(b_cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
-                    pred_old = heat_exp(cls_score[:, :now_cls_low], cfg.CIOD.TEMPERATURE)
+                    label_old = heat_exp(b_cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
+                    pred_old = heat_exp(cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
                     loss_cls_old = F.kl_div(torch.log(pred_old), label_old)
 
                     # For new classes, use cross entropy loss
-                    label_new = rois_label.index_select(0, new_label_mask) - now_cls_low
-                    pred_new = cls_score[:, now_cls_low:now_cls_high].index_select(0, new_label_mask)
+                    label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
+                    pred_new = cls_score[:, index_new]
                     loss_cls_new = F.cross_entropy(pred_new, label_new)
 
                     # Process class 0 (__background__)
-                    label_zero = rois_label.index_select(0, zero_label_mask)
-                    pred_zero = cls_score[:, now_cls_low:now_cls_high].index_select(0, zero_label_mask)
-                    loss_cls_zero = F.cross_entropy(pred_zero, label_zero)
+                    # If it is background class, we do not want to change it too much
+                    zero_label_mask = (rois_label == 0).nonzero().squeeze()
+                    label_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
+                    pred_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
+                    loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
 
                     # Total classification loss
-                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * (loss_cls_new + loss_cls_zero)
+                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new + loss_cls_zero
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + \
                        RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
@@ -339,7 +346,7 @@ if __name__ == '__main__':
 
         # Walk through all examples
         data_iter = iter(dataloader)
-        for _ in trange(iters_per_epoch, desc="Iter", leave=False):
+        for _ in trange(iters_per_epoch, desc="Repr", leave=False):
             data = next(data_iter)
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])
