@@ -4,7 +4,7 @@ CUDA_PATH=/usr/local/cuda/
 
 cd src
 echo "Compiling my_lib kernels by nvcc..."
-nvcc -c -o roi_crop_cuda_kernel.cu.o roi_crop_cuda_kernel.cu -x cu -Xcompiler -fPIC -arch=sm_61
+nvcc -c -o roi_crop_cuda_kernel.cu.o roi_crop_cuda_kernel.cu -x cu -Xcompiler -fPIC $CUDA_ARCH
 
 cd ../
 python build.py
