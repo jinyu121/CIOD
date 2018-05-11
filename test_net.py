@@ -54,6 +54,7 @@ def parse_args():
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
     parser.add_argument('--parallel_type', dest='parallel_type', default=0, type=int,
                         help='which part of model to parallel, 0: all, 1: model before roi pooling')
+    parser.add_argument('--ck', dest='self_check', action='store_true', help='Self check: test on training set')
     args = parser.parse_args()
     return args
 
@@ -107,8 +108,10 @@ if __name__ == '__main__':
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}a".format(group),
-                                                              training=False)
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(
+            args.dataset,
+            "{}Step{}a".format("trainval" if args.self_check else "test", group),
+            training=False)
         imdb.competition_mode(on=True)
 
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
@@ -253,7 +256,8 @@ if __name__ == '__main__':
         ap = imdb.evaluate_detections(all_boxes, output_dir)
         aps.append(ap)
 
-    print("=" * 10, "RCNN Result Summary (mAP, AP, %)", "=" * 10)
+    print("{0} RCNN {1} set Summary (mAP, AP, %) {0}".format(
+        "=" * 10, "Training" if args.self_check else "Test"))
     for now_group, x in enumerate(aps):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
@@ -262,7 +266,8 @@ if __name__ == '__main__':
             print("{:.2f}\t".format(y * 100), end="")
         print()
 
-    print("=" * 10, "RCNN Group Summary (mAP, AP, %)", "=" * 10)
+    print("{0} RCNN {1} set Group Summary (mAP, AP, %) {0}".format(
+        "=" * 10, "Training" if args.self_check else "Test"))
     for now_group in range(cfg.CIOD.GROUPS):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS

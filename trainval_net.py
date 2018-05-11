@@ -209,7 +209,7 @@ if __name__ == '__main__':
         for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=False):
             loss_temp = 0
 
-            if epoch % (cfg.TRAIN.LEARNING_RATE_DECAY_STEP) == 0 and epoch > 0:
+            if epoch % cfg.TRAIN.LEARNING_RATE_DECAY_STEP == 0 and epoch > 0:
                 adjust_learning_rate(optimizer, cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA)
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
