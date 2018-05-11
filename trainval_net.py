@@ -246,7 +246,7 @@ if __name__ == '__main__':
                     # Less-forgetting Learning in Deep Neural Networks (Equ 1)
                     rpn_loss_cls_old = F.mse_loss(rpn_cls_score, b_rpn_cls_score)  # To make change small?
                     rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
-                    rpn_loss_cls = rpn_loss_cls_old + cfg.CIOD.RPN_NEW_CLS_LOSS_SCALE * rpn_loss_cls_new
+                    rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
 
                     # Classification loss
                     # For old class, use knowledge distillation with KLDivLoss
@@ -268,13 +268,13 @@ if __name__ == '__main__':
 
                     # Process class 0 (__background__)
                     # If it is background class, we do not want to change it too much
-                    zero_label_mask = (rois_label == 0).nonzero().squeeze()
-                    label_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
-                    pred_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
-                    loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
+                    # zero_label_mask = (rois_label == 0).nonzero().squeeze()
+                    # label_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
+                    # pred_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
+                    # loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
 
                     # Total classification loss
-                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new + loss_cls_zero
+                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new  # + loss_cls_zero
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + \
                        RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
