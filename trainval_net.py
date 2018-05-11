@@ -234,8 +234,7 @@ if __name__ == '__main__':
                     rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
 
                     # Classification loss
-                    cls_prob = F.softmax(cls_score[..., :now_cls_high], dim=-1)
-                    RCNN_loss_cls = F.cross_entropy(cls_prob, rois_label)
+                    RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
                 else:
                     b_rois, b_cls_score, b_bbox_pred, b_pooled_feat, \
                     b_rpn_cls_score, b_rpn_label, b_rpn_feature, \
