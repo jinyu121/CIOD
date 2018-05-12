@@ -248,7 +248,7 @@ if __name__ == '__main__':
     for now_group, x in enumerate(aps):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
-        print("{:.2f} :".format(np.mean(x) * 100), end="\t")
+        print("{:.2f} :".format(np.mean(x[:now_classes_high]) * 100), end="\t")
         for y in x[:now_classes_high]:
             print("{:.2f}\t".format(y * 100), end="")
         print()
