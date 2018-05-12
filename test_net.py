@@ -66,7 +66,7 @@ if __name__ == '__main__':
     print('Called with args:')
     print(args)
 
-    cfg.CUDA = torch.cuda.is_available()
+    cfg.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
 
     np.random.seed(cfg.RNG_SEED)
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
