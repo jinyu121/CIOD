@@ -263,3 +263,11 @@ def cdist(x, y):
     y = y.unsqueeze(0)
     ans = torch.sqrt(torch.sum((x - y) ** 2, dim=2))
     return ans
+
+
+def tensor_holder(data, cuda=False, variable=False):
+    if cuda:
+        data = data.cuda()
+    if variable:
+        data = Variable(data)
+    return data

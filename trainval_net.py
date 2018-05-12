@@ -17,7 +17,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
@@ -27,7 +26,7 @@ from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.utils.config import cfg, cfg_from_file, cfg_from_list
 from model.utils.net_utils import adjust_learning_rate, save_checkpoint, clip_gradient
-from model.utils.net_utils import change_require_gradient, heat_exp
+from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -100,23 +99,10 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
 
     # initilize the tensor holder here.
-    im_data = torch.FloatTensor(1)
-    im_info = torch.FloatTensor(1)
-    num_boxes = torch.LongTensor(1)
-    gt_boxes = torch.FloatTensor(1)
-
-    # ship to cuda
-    if cfg.CUDA:
-        im_data = im_data.cuda()
-        im_info = im_info.cuda()
-        num_boxes = num_boxes.cuda()
-        gt_boxes = gt_boxes.cuda()
-
-    # make variable
-    im_data = Variable(im_data)
-    im_info = Variable(im_info)
-    num_boxes = Variable(num_boxes)
-    gt_boxes = Variable(gt_boxes)
+    im_data = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
+    im_info = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
+    num_boxes = tensor_holder(torch.LongTensor(1), cfg.CUDA, True)
+    gt_boxes = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
 
     class_means = np.zeros([2048, 21], dtype=np.float)
 

@@ -26,7 +26,7 @@ from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
 from model.utils.config import cfg, cfg_from_file, get_output_dir
-from model.utils.net_utils import vis_detections, cdist
+from model.utils.net_utils import vis_detections, cdist, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -83,23 +83,10 @@ if __name__ == '__main__':
     load_dir = os.path.join(args.load_dir, str(args.session), args.net, args.dataset)
 
     # initilize the tensor holder here.
-    im_data = torch.FloatTensor(1)
-    im_info = torch.FloatTensor(1)
-    num_boxes = torch.LongTensor(1)
-    gt_boxes = torch.FloatTensor(1)
-
-    # ship to cuda
-    if cfg.CUDA:
-        im_data = im_data.cuda()
-        im_info = im_info.cuda()
-        num_boxes = num_boxes.cuda()
-        gt_boxes = gt_boxes.cuda()
-
-    # make variable
-    im_data = Variable(im_data)
-    im_info = Variable(im_info)
-    num_boxes = Variable(num_boxes)
-    gt_boxes = Variable(gt_boxes)
+    im_data = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
+    im_info = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
+    num_boxes = tensor_holder(torch.LongTensor(1), cfg.CUDA, True)
+    gt_boxes = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
 
     max_per_image = 100
     thresh = 0.05 if args.vis else 0.0
