@@ -182,6 +182,9 @@ if __name__ == '__main__':
 
         iters_per_epoch = int(train_size / cfg.TRAIN.BATCH_SIZE)
 
+        index_old = tensor_holder(torch.from_numpy(np.arange(now_cls_low)), True, True)
+        index_new = tensor_holder(torch.from_numpy(np.array([0] + list(range(now_cls_low, now_cls_high)))), True, True)
+
         tot_step = 0
 
         # setting to train mode
@@ -231,17 +234,13 @@ if __name__ == '__main__':
                     # For new class, use cross entropy loss
                     # Notice, he new group and old group shares the `__background__` class.
 
-                    index_old = list(range(now_cls_low))
-                    index_new = [0] + list(range(now_cls_low, now_cls_high))
-
-                    # For old class, use knowledge distillation with KLDivLoss
-                    label_old = heat_exp(b_cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
-                    pred_old = heat_exp(cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
+                    label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                    pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
                     loss_cls_old = F.kl_div(torch.log(pred_old), label_old)
 
                     # For new classes, use cross entropy loss
                     label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
-                    pred_new = cls_score[:, index_new]
+                    pred_new = cls_score.index_select(1, index_new)
                     loss_cls_new = F.cross_entropy(pred_new, label_new)
 
                     # Process class 0 (__background__)
