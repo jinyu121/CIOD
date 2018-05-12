@@ -62,8 +62,7 @@ class _RPN(nn.Module):
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)
 
         rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
-        # It is a 4-dim matrix, will do softmax on dim 1 by default
-        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, dim=1)
+        rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape)
         rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
 
         # get rpn offsets to the anchor boxes
@@ -93,7 +92,7 @@ class _RPN(nn.Module):
             rpn_cls_score = torch.index_select(rpn_cls_score.view(-1, 2), 0, rpn_keep)
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())
-            # self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
+            self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
             fg_cnt = torch.sum(rpn_label.data.ne(0))
 
             rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
@@ -106,4 +105,4 @@ class _RPN(nn.Module):
             self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
                                                 rpn_bbox_outside_weights, sigma=3, dim=[1, 2, 3])
 
-        return rois, rpn_conv1, rpn_cls_score, rpn_label, self.rpn_loss_box
+        return rois, self.rpn_loss_cls, self.rpn_loss_box, rpn_label, rpn_conv1, rpn_cls_score

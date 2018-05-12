@@ -89,7 +89,7 @@ if __name__ == '__main__':
     if args.epoch:
         cfg_from_list(["TRAIN.MAX_EPOCH", args.epoch])
 
-    cfg.CUDA = torch.cuda.is_available()
+    cfg.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
     cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
 
     print('Using config:')
@@ -97,8 +97,7 @@ if __name__ == '__main__':
     np.random.seed(cfg.RNG_SEED)
 
     output_dir = os.path.join(args.save_dir, str(args.session), args.net, args.dataset)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     # initilize the tensor holder here.
     im_data = torch.FloatTensor(1)
@@ -123,25 +122,21 @@ if __name__ == '__main__':
 
     b_fasterRCNN = None  # The backup net
 
-    if args.resume:
-        start_group = args.resume_group
-    else:
-        start_group = 0
-
+    start_group = args.resume_group if args.resume else 0
     for group in trange(start_group, cfg.CIOD.GROUPS, desc="Group", leave=False):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}".format(group))
-        train_size = len(roidb)
-        tqdm.write('{:d} roidb entries'.format(len(roidb)))
-
         lr = cfg.TRAIN.LEARNING_RATE
 
+        # Get database
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}".format(group))
+        train_size = len(roidb)
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, cfg.TRAIN.BATCH_SIZE, imdb.num_classes, training=True)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch, num_workers=args.num_workers)
+        tqdm.write('{:d} roidb entries'.format(len(roidb)))
 
         if 0 == group or args.resume:  # Foe the first group, initialize the network here.
             if args.net == 'vgg16':
@@ -223,24 +218,21 @@ if __name__ == '__main__':
                 num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
                 fasterRCNN.zero_grad()
-                rois, cls_score, bbox_pred, pooled_feat, \
-                rpn_cls_score, rpn_label, rpn_feature, \
-                rpn_loss_bbox, \
-                rois_label, \
-                RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                rois, cls_prob, bbox_pred, \
+                rpn_label, rpn_feature, rpn_cls_score, \
+                rois_label, pooled_feat, cls_score, \
+                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
+                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                 if 0 == group:
-                    # RPN binary classification loss
-                    rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
-
-                    # Classification loss
+                    # Classification loss fix
                     RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
                 else:
-                    b_rois, b_cls_score, b_bbox_pred, b_pooled_feat, \
-                    b_rpn_cls_score, b_rpn_label, b_rpn_feature, \
-                    b_rpn_loss_bbox, \
-                    b_rois_label, \
-                    b_RCNN_loss_bbox = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                    b_rois, b_cls_prob, b_bbox_pred, \
+                    b_rpn_label, b_rpn_feature, b_rpn_cls_score, \
+                    b_rois_label, b_pooled_feat, b_cls_score, \
+                    b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
+                        = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                     # RPN binary classification loss
                     # Less-forgetting Learning in Deep Neural Networks (Equ 1)
@@ -352,11 +344,11 @@ if __name__ == '__main__':
             gt_boxes.data.resize_(data[2].size()).copy_(data[2])
             num_boxes.data.resize_(data[3].size()).copy_(data[3])
             fasterRCNN.zero_grad()
-            rois, cls_score, bbox_pred, pooled_feat, \
-            rpn_cls_score, rpn_label, rpn_feature, \
-            rpn_loss_bbox, \
-            rois_label, \
-            RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            rois, cls_prob, bbox_pred, \
+            rpn_label, rpn_feature, rpn_cls_score, \
+            rois_label, pooled_feat, cls_score, \
+            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
+                = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
             fasterRCNN.zero_grad()
             Dtmp = torch.t(pooled_feat)
             Dtot = Dtmp / torch.norm(Dtmp)

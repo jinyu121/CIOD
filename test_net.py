@@ -157,11 +157,11 @@ if __name__ == '__main__':
             gt_boxes.data.resize_(data[2].size()).copy_(data[2])
             num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
-            rois, cls_score, bbox_pred, pooled_feat, \
-            rpn_cls_score, rpn_label, rpn_feature, \
-            rpn_loss_bbox, \
-            rois_label, \
-            RCNN_loss_bbox = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            rois, cls_prob, bbox_pred, \
+            rpn_label, rpn_feature, rpn_cls_score, \
+            rois_label, pooled_feat, cls_score, \
+            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
+                = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
             if args.no_repr:
                 scores = F.softmax(cls_score)
