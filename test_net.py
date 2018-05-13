@@ -151,8 +151,9 @@ if __name__ == '__main__':
                 = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
             if args.no_repr:
-                scores = F.softmax(cls_score)
-                cls_prob = scores.view(im_data.size(0), rois.size(1), -1).data
+                cls_prob = torch.zeros_like(cls_score)
+                cls_prob[:, :now_cls_high] = F.softmax(cls_score[:, :now_cls_high])
+                scores = cls_prob.view(im_data.size(0), rois.size(1), -1).data
             else:
                 # Representation classification
                 scores = torch.zeros_like(cls_score.data)
