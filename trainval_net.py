@@ -60,7 +60,7 @@ def parse_args():
 
     parser.add_argument('--save_dir', dest='save_dir',
                         help='directory to save models', default="results",
-                        nargs=argparse.REMAINDER)
+                        type=str)
     parser.add_argument('--nw', dest='num_workers',
                         help='number of worker to load data',
                         default=0, type=int)
