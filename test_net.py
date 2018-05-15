@@ -89,6 +89,8 @@ def parse_args():
     parser.add_argument('--vis', dest='vis',
                         help='visualization mode',
                         action='store_true')
+    parser.add_argument('--group', dest='group',
+                        default=0, type=int)
     args = parser.parse_args()
     return args
 
@@ -149,7 +151,7 @@ if __name__ == '__main__':
     if not os.path.exists(input_dir):
         raise Exception('There is no input directory for loading network from ' + input_dir)
     load_name = os.path.join(input_dir,
-                             'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+                             'faster_rcnn_{}_{}.pth'.format(args.checksession, args.group))
 
     # initilize the network here.
     if args.net == 'vgg16':

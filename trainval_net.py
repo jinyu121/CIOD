@@ -116,7 +116,8 @@ def parse_args():
     parser.add_argument('--use_tfboard', dest='use_tfboard',
                         help='whether use tensorflow tensorboard',
                         default=False, type=bool)
-
+    parser.add_argument('--group', dest='group',
+                        default=0, type=int)
     args = parser.parse_args()
     return args
 
@@ -277,16 +278,14 @@ if __name__ == '__main__':
     elif args.optimizer == "sgd":
         optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
-    if args.resume:
-        load_name = os.path.join(output_dir,
-                                 'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+    if args.group >= 1:
+        load_name = os.path.join(
+            output_dir,
+            'faster_rcnn_{}_{}.pth'.format(args.session, args.group - 1))
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
-        args.session = checkpoint['session']
-        args.start_epoch = checkpoint['epoch']
         fasterRCNN.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
-        lr = optimizer.param_groups[0]['lr']
         if 'pooling_mode' in checkpoint.keys():
             cfg.POOLING_MODE = checkpoint['pooling_mode']
         print("loaded checkpoint %s" % (load_name))
@@ -373,26 +372,15 @@ if __name__ == '__main__':
                 loss_temp = 0
                 start = time.time()
 
-        if args.mGPUs:
-            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-            save_checkpoint({
-                'session': args.session,
-                'epoch': epoch + 1,
-                'model': fasterRCNN.module.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'pooling_mode': cfg.POOLING_MODE,
-                'class_agnostic': args.class_agnostic,
-            }, save_name)
-        else:
-            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-            save_checkpoint({
-                'session': args.session,
-                'epoch': epoch + 1,
-                'model': fasterRCNN.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'pooling_mode': cfg.POOLING_MODE,
-                'class_agnostic': args.class_agnostic,
-            }, save_name)
+        save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}.pth'.format(args.session, args.group))
+        save_checkpoint({
+            'session': args.session,
+            'epoch': epoch + 1,
+            'model': (fasterRCNN.module if args.mGPUs else fasterRCNN).state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'pooling_mode': cfg.POOLING_MODE,
+            'class_agnostic': args.class_agnostic,
+        }, save_name)
         print('save model: {}'.format(save_name))
 
         end = time.time()
