@@ -104,7 +104,7 @@ if __name__ == '__main__':
     num_boxes = tensor_holder(torch.LongTensor(1), cfg.CUDA, True)
     gt_boxes = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
 
-    class_means = np.zeros([2048, 21], dtype=np.float)
+    class_means = np.zeros([2048, cfg.CIOD.TOTAL_CLS + 1], dtype=np.float)
 
     b_fasterRCNN = None  # The backup net
 
@@ -168,10 +168,10 @@ if __name__ == '__main__':
 
             if args.resume:
                 optimizer.load_state_dict(checkpoint['optimizer'])
-                lr = optimizer.param_groups[0]['lr']
+                # lr = optimizer.param_groups[0]['lr']
                 if 'pooling_mode' in checkpoint.keys():
                     cfg.POOLING_MODE = checkpoint['pooling_mode']
-                class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
+                class_means[:, :now_cls_low] = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_low]).float()
                 tqdm.write("Resume from {}".format(load_name))
 
         args.resume = False
