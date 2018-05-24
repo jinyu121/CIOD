@@ -36,27 +36,31 @@ def parse_args():
     Parse input arguments
     """
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
+
     # Config the session ID for identify
-    parser.add_argument('--s', dest='session', default=1, type=int, help='training session ID')
+    parser.add_argument('--s', dest='session', default=1, type=int, help='Training session ID')
+    parser.add_argument('--group', dest='group', type=int, default=-1, help='Train certain group, or all (-1) groups')
+
     # Config the dataset
     parser.add_argument('--dataset', dest='dataset', type=str, default='2007', help='training dataset')
+    parser.add_argument('--sc', dest='self_check', action='store_true', help='Self check: test on training set')
+
     # Config the net
     parser.add_argument('--net', dest='net', default='res101', type=str, help='vgg16, res101')
-    parser.add_argument('--ls', dest='large_scale', action='store_true', help='whether use large imag scale')
+    parser.add_argument('--ls', dest='large_scale', action='store_true', help='Whether use large image scale')
     parser.add_argument('--cag', dest='class_agnostic', action='store_true',
-                        help='whether perform class_agnostic bbox regression')
+                        help='Whether perform class_agnostic bbox regression')
     parser.add_argument('--no_repr', dest='no_repr', action='store_true',
-                        help='Do not use representation classification')
+                        help='Do not use representation classifier')
+
     # Logging, displaying and saving
-    parser.add_argument('--load_dir', dest='load_dir', type=str, help='directory to load models', default="results")
-    parser.add_argument('--vis', dest='vis', action='store_true', help='visualization mode')
+    parser.add_argument('--load_dir', dest='load_dir', type=str, help='Directory to load models', default="results")
+    parser.add_argument('--vis', dest='vis', action='store_true', help='Visualization mode')
+
     # Other config override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
-    parser.add_argument('--parallel_type', dest='parallel_type', default=0, type=int,
-                        help='which part of model to parallel, 0: all, 1: model before roi pooling')
-    parser.add_argument('--ck', dest='self_check', action='store_true', help='Self check: test on training set')
-    args = parser.parse_args()
-    return args
+
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
@@ -82,6 +86,19 @@ if __name__ == '__main__':
 
     load_dir = os.path.join(args.load_dir, str(args.session), args.net, args.dataset)
 
+    # initilize the network here.
+    if args.net == 'vgg16':
+        fasterRCNN = vgg16(cfg.CIOD.TOTAL_CLS, pretrained=True, class_agnostic=args.class_agnostic)
+    elif args.net.startswith('res'):
+        fasterRCNN = resnet(cfg.CIOD.TOTAL_CLS, int(args.net[3:]),
+                            pretrained=True, class_agnostic=args.class_agnostic)
+    else:
+        raise KeyError("network is not defined")
+    fasterRCNN.create_architecture()
+
+    if cfg.CUDA:
+        fasterRCNN.cuda()
+
     # initilize the tensor holder here.
     im_data = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
     im_info = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
@@ -91,7 +108,11 @@ if __name__ == '__main__':
     max_per_image = 100
     thresh = 0.05 if args.vis else 0.0
     aps = []
-    for group in trange(cfg.CIOD.GROUPS, desc="Group", leave=False):
+
+    # Train ALL groups, or just ONE group
+    start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)
+
+    for group in trange(start_group, end_group, desc="Group", leave=False):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
@@ -100,22 +121,7 @@ if __name__ == '__main__':
             "{}Step{}a".format("trainval" if args.self_check else "test", group),
             training=False)
         imdb.competition_mode(on=True)
-
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
-
-        if 0 == group:
-            # initilize the network here.
-            if args.net == 'vgg16':
-                fasterRCNN = vgg16(imdb.classes, pretrained=True, class_agnostic=args.class_agnostic)
-            elif args.net.startswith('res'):
-                fasterRCNN = resnet(imdb.classes, int(args.net[3:]),
-                                    pretrained=True, class_agnostic=args.class_agnostic)
-            else:
-                raise KeyError("network is not defined")
-            fasterRCNN.create_architecture()
-
-            if cfg.CUDA:
-                fasterRCNN.cuda()
 
         load_name = os.path.join(
             load_dir, 'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, group))
@@ -125,6 +131,7 @@ if __name__ == '__main__':
         class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
         cfg.POOLING_MODE = checkpoint['pooling_mode']
         tqdm.write('load model successfully!')
+
         if cfg.CUDA:
             class_means = class_means.cuda()
 
@@ -133,7 +140,6 @@ if __name__ == '__main__':
 
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=False, normalize=False)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=16, pin_memory=True)
-        empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
 
         fasterRCNN.eval()
         data_iter = iter(dataloader)
@@ -219,7 +225,7 @@ if __name__ == '__main__':
                         im2show = vis_detections(im2show, imdb.classes[j], cls_dets.cpu().numpy(), 0.3)
                     all_boxes[j][i] = cls_dets.cpu().numpy()
                 else:
-                    all_boxes[j][i] = empty_array
+                    all_boxes[j][i] = np.transpose(np.array([[], [], [], [], []]), (1, 0))
 
             # Limit to max_per_image detections *over all classes*
             if max_per_image > 0:

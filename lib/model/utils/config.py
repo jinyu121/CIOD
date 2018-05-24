@@ -19,6 +19,9 @@ cfg = __C
 #
 __C.TRAIN = edict()
 
+# Optimizer
+__C.TRAIN.OPTIMIZER = 'sgd'
+
 # Initial learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
 
