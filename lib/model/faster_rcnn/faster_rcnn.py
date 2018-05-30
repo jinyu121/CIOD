@@ -1,20 +1,16 @@
-import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import torchvision.models as models
-from torch.autograd import Variable
-import numpy as np
-from model.utils.config import cfg
-from model.rpn.rpn import _RPN
-from model.roi_pooling.modules.roi_pool import _RoIPooling
-from model.roi_crop.modules.roi_crop import _RoICrop
+
 from model.roi_align.modules.roi_align import RoIAlignAvg
+from model.roi_crop.modules.roi_crop import _RoICrop
+from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
-import time
-import pdb
-from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
+from model.rpn.rpn import _RPN
+from model.utils.config import cfg
+from model.utils.net_utils import _smooth_l1_loss, _affine_grid_gen
+from model.utils.net_utils import change_require_gradient
 
 
 class _fasterRCNN(nn.Module):
@@ -49,7 +45,8 @@ class _fasterRCNN(nn.Module):
         base_feat = self.RCNN_base(im_data)
 
         # feed base feature map tp RPN to obtain rois
-        rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
+        rois, rpn_loss_cls, rpn_loss_bbox, rpn_label, rpn_feature, rpn_cls_score = self.RCNN_rpn(
+            base_feat, im_info, gt_boxes, num_boxes)
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
@@ -61,7 +58,7 @@ class _fasterRCNN(nn.Module):
             rois_inside_ws = Variable(rois_inside_ws.view(-1, rois_inside_ws.size(2)))
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
         else:
-            rois_label = None
+            rois_label = 0
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
@@ -113,7 +110,10 @@ class _fasterRCNN(nn.Module):
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+        return rois, cls_prob, bbox_pred, \
+               rpn_label, rpn_feature, rpn_cls_score, \
+               rois_label, pooled_feat, cls_score, \
+               rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -136,3 +136,6 @@ class _fasterRCNN(nn.Module):
     def create_architecture(self):
         self._init_modules()
         self._init_weights()
+
+    def freeze(self):
+        change_require_gradient(self, False)

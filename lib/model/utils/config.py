@@ -3,8 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import os.path as osp
+
 import numpy as np
+import os.path as osp
 # `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
 
@@ -18,8 +19,20 @@ cfg = __C
 #
 __C.TRAIN = edict()
 
+# Optimizer
+__C.TRAIN.OPTIMIZER = 'sgd'
+
 # Initial learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
+
+# Learning rate decay frequency
+__C.TRAIN.LEARNING_RATE_DECAY_STEP = 5
+
+# Learning rate decay amount
+__C.TRAIN.LEARNING_RATE_DECAY_GAMMA = 0.1
+
+# Training epoches
+__C.TRAIN.MAX_EPOCH = 100
 
 # Momentum
 __C.TRAIN.MOMENTUM = 0.9
@@ -57,6 +70,9 @@ __C.TRAIN.SNAPSHOT_KEPT = 3
 
 # The time interval for saving tensorflow summaries
 __C.TRAIN.SUMMARY_INTERVAL = 180
+
+# The time interval for saving weights
+__C.TRAIN.SAVE_INTERVAL = 20
 
 # Scale to use during training (can list multiple scales)
 # The scale is the pixel size of an image's shortest side
@@ -301,7 +317,13 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
-import pdb
+# CIOD
+__C.CIOD = edict()
+__C.CIOD.TOTAL_CLS = 20
+__C.CIOD.GROUPS = 4
+__C.CIOD.TEMPERATURE = 2
+__C.CIOD.RPN_CLS_LOSS_SCALE_FEATURE = 0.25
+__C.CIOD.NEW_CLS_LOSS_SCALE = 2.
 
 
 def get_output_dir(imdb, weights_filename):

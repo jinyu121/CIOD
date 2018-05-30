@@ -1,14 +1,15 @@
+import pdb
+import random
+
+import cv2
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import numpy as np
-import torchvision.models as models
-from model.utils.config import cfg
+
 from model.roi_crop.functions.roi_crop import RoICropFunction
-import cv2
-import pdb
-import random
+from model.utils.config import cfg
 
 
 def save_net(fname, net):
@@ -227,3 +228,46 @@ def compare_grid_sample():
     pdb.set_trace()
 
     delta = (grad_input_off.data - grad_input_stn).sum()
+
+
+def make_one_hot(data, n_classes=None):
+    assert len(data.shape) in (1, 2), "Shape Error"
+    if len(data.shape) == 2:
+        assert 1 in data.shape, "Can not process 2D label"
+    data = data.view([-1, 1])
+    batch_size = data.shape[0]
+    if n_classes is None:
+        n_classes = torch.max(data) + 1
+    y_onehot = torch.zeros([batch_size, n_classes])
+    y_onehot.scatter_(1, data.data.cpu(), 1)
+    return y_onehot
+
+
+def change_require_gradient(layer, status):
+    for param in layer.parameters():
+        param.requires_grad = status
+
+
+def heat_sum(data, temperature):
+    data = torch.pow(data, 1. / temperature)
+    data = data / torch.sum(data, dim=-1, keepdim=True) / temperature
+    return data
+
+
+def heat_exp(data, temperature):
+    return F.softmax(data / temperature, dim=-1) / temperature
+
+
+def cdist(x, y):
+    x = x.expand([y.shape[0], *x.shape]).permute(1, 0, 2)
+    y = y.unsqueeze(0)
+    ans = torch.sqrt(torch.sum((x - y) ** 2, dim=2))
+    return ans
+
+
+def tensor_holder(data, cuda=False, variable=False):
+    if cuda:
+        data = data.cuda()
+    if variable:
+        data = Variable(data)
+    return data
