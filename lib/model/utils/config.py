@@ -324,6 +324,8 @@ __C.CIOD.GROUPS = 4
 __C.CIOD.TEMPERATURE = 2
 __C.CIOD.RPN_CLS_LOSS_SCALE_FEATURE = 0.25
 __C.CIOD.NEW_CLS_LOSS_SCALE = 2.
+__C.CIOD.DISTILL_GROUP = False
+__C.CIOD.DISTILL_BACKGROUND = False
 
 
 def get_output_dir(imdb, weights_filename):

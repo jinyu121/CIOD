@@ -271,3 +271,29 @@ def tensor_holder(data, cuda=False, variable=False):
     if variable:
         data = Variable(data)
     return data
+
+
+def ciod_old_and_new(tot_cls, tot_group, sep_group):
+    group_cls = [1]
+    group_cls_arr = []
+    group_merged_arr = []
+
+    low = group_cls[-1]
+    for group in range(tot_group):
+        high = tot_cls * (group + 1) // tot_group + 1
+        group_cls.append(high)
+        group_cls_arr.append(np.arange(low, high).tolist())
+        low = high
+
+        if group:
+            if sep_group:
+                tmp = [[0] + x for x in group_cls_arr[:-1]]
+            else:
+                tmp = [[0] + np.concatenate(group_cls_arr[:-1]).tolist()]
+        else:
+            tmp = [[0]]
+        group_merged_arr.append(tmp)
+    group_cls_arr = [tensor_holder(torch.from_numpy(np.array([0] + x)), cfg.CUDA, True) for x in group_cls_arr]
+    group_merged_arr = [[tensor_holder(torch.from_numpy(np.array(x)), cfg.CUDA, True) for x in y] for y in
+                        group_merged_arr]
+    return group_cls, group_cls_arr, group_merged_arr

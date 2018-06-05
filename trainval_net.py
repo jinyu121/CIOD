@@ -21,15 +21,15 @@ from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
 import _init_paths
+from datasets.pascal_voc import pascal_voc
 from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
-from model.utils.config import cfg, cfg_from_file, cfg_from_list
+from model.utils.config import cfg, cfg_from_file
 from model.utils.net_utils import adjust_learning_rate, save_checkpoint, clip_gradient
-from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder
+from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
-from datasets.pascal_voc import pascal_voc
 
 
 def parse_args():
@@ -150,20 +150,18 @@ if __name__ == '__main__':
     if args.group > 0:  # And load the status here
         optimizer.load_state_dict(checkpoint['optimizer'])
         cfg.POOLING_MODE = checkpoint['pooling_mode']
-        class_means = torch.from_numpy(checkpoint['cls_means']).float()
+        class_means = checkpoint['cls_means'].float()
         tqdm.write("Resume from {}".format(load_name))
 
-    group_cls = [0, 1]
-    for group in range(cfg.CIOD.GROUPS):
-        group_cls.append(cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1)
+    group_cls, group_cls_arr, group_merged_arr = ciod_old_and_new(
+        cfg.CIOD.TOTAL_CLS, cfg.CIOD.GROUPS, cfg.CIOD.DISTILL_GROUP)
 
     # Train ALL groups, or just ONE group
     start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)
 
     # Now we enter the group loop
     for group in trange(start_group, end_group, desc="Group", leave=False):
-        now_cls_low = group_cls[group + 1]
-        now_cls_high = group_cls[group + 2]
+        now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
@@ -184,10 +182,6 @@ if __name__ == '__main__':
         change_require_gradient(b_fasterRCNN, False)
 
         iters_per_epoch = train_size // cfg.TRAIN.BATCH_SIZE
-
-        # Class index
-        index_old = tensor_holder(torch.from_numpy(np.arange(now_cls_low)), True, True)
-        index_new = tensor_holder(torch.from_numpy(np.array([0] + list(range(now_cls_low, now_cls_high)))), True, True)
 
         tot_step = 0
 
@@ -219,6 +213,7 @@ if __name__ == '__main__':
                     # Classification loss fix
                     RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
                 else:
+                    # Get result from the backup net
                     b_rois, b_cls_prob, b_bbox_pred, \
                     b_rpn_label, b_rpn_feature, b_rpn_cls_score, \
                     b_rois_label, b_pooled_feat, b_cls_score, \
@@ -232,26 +227,30 @@ if __name__ == '__main__':
                     rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
 
                     # Classification loss in Fast R-CNN
-
                     # For old class, use knowledge distillation with KLDivLoss
-                    label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                    pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                    loss_cls_old = F.kl_div(torch.log(pred_old), label_old)
+                    loss_cls_old = 0
+                    for index_old in group_merged_arr[group]:
+                        label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                        pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                        loss_cls_old += F.kl_div(torch.log(pred_old), label_old)
 
                     # For new classes, use cross entropy loss
                     label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
-                    pred_new = cls_score.index_select(1, index_new)
+                    pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
                     loss_cls_new = F.cross_entropy(pred_new, label_new)
 
                     # Process class 0 (__background__)
                     # If it is background class, we do not want to change it too much
-                    # zero_label_mask = (rois_label == 0).nonzero().squeeze()
-                    # label_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
-                    # pred_zero_f = cls_score[:, index_old].index_select(0, zero_label_mask)
-                    # loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
+                    if cfg.CIOD.DISTILL_BACKGROUND:
+                        zero_label_mask = (rois_label == 0).nonzero().squeeze()
+                        label_zero_f = cls_score.index_select(0, zero_label_mask)
+                        pred_zero_f = cls_score.index_select(0, zero_label_mask)
+                        loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
 
                     # Total classification loss
-                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new  # + loss_cls_zero
+                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new
+                    if cfg.CIOD.DISTILL_BACKGROUND:
+                        RCNN_loss_cls += loss_cls_zero
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
 
@@ -369,6 +368,6 @@ if __name__ == '__main__':
             'cls_means': class_means,
         }, save_name)
         tqdm.write('save model: {}'.format(save_name))
-        print("{0} Group {1} Done {0}".format('=' * 10, group))
+        print("{0} Group {1} Done {0}".format('=' * 10, group), end="\n" * 5)
 
-    print("{0} All Done {0}".format('=' * 10))
+    print("{0} All Done {0}".format('=' * 10), end="\n" * 5)
