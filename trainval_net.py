@@ -222,7 +222,7 @@ if __name__ == '__main__':
 
                     # RPN binary classification loss
                     # Less-forgetting Learning in Deep Neural Networks (Equ 1)
-                    rpn_loss_cls_old = F.mse_loss(rpn_cls_score, b_rpn_cls_score)  # To make change small?
+                    rpn_loss_cls_old = F.mse_loss(rpn_feature, b_rpn_feature)  # To make change small?
                     rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
                     rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
 
