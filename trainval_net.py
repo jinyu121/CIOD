@@ -26,7 +26,7 @@ from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.utils.config import cfg, cfg_from_file
-from model.utils.net_utils import adjust_learning_rate, save_checkpoint, clip_gradient
+from model.utils.net_utils import adjust_learning_rate, set_learning_rate, save_checkpoint, clip_gradient
 from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
@@ -129,10 +129,14 @@ if __name__ == '__main__':
 
     # How to optimize
     params = []
+    special_params_index = []
     lr = cfg.TRAIN.LEARNING_RATE
 
-    for key, value in dict(fasterRCNN.named_parameters()).items():  # since we froze some layers
+    for ith, (key, value) in enumerate(dict(fasterRCNN.named_parameters()).items()):  # since we froze some layers
         if value.requires_grad:
+            if 'RCNN_rpn.RPN_cls_score' in key:  # Record the parameter position of RPN_cls_score
+                special_params_index.append(ith)
+
             if 'bias' in key:
                 params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
                             'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
@@ -166,6 +170,9 @@ if __name__ == '__main__':
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
+        set_learning_rate(optimizer, lr)
+        if group:
+            set_learning_rate(optimizer, 0.0, special_params_index)
         fasterRCNN.train()
 
         # Get database

@@ -20,6 +20,7 @@ from torch.autograd import Variable
 from tqdm import tqdm, trange
 
 import _init_paths
+from datasets.pascal_voc import pascal_voc
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.nms.nms_wrapper import nms
@@ -86,14 +87,14 @@ if __name__ == '__main__':
 
     load_dir = os.path.join(args.load_dir, str(args.session), args.net, args.dataset)
 
-    # initilize the network here.
+    # Get the net
     if args.net == 'vgg16':
-        fasterRCNN = vgg16(cfg.CIOD.TOTAL_CLS, pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = vgg16(pascal_voc.classes, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net.startswith('res'):
-        fasterRCNN = resnet(cfg.CIOD.TOTAL_CLS, int(args.net[3:]),
+        fasterRCNN = resnet(pascal_voc.classes, int(args.net[3:]),
                             pretrained=True, class_agnostic=args.class_agnostic)
     else:
-        raise KeyError("network is not defined")
+        raise KeyError("Unknown Network")
     fasterRCNN.create_architecture()
 
     if cfg.CUDA:
@@ -128,7 +129,7 @@ if __name__ == '__main__':
         tqdm.write("load checkpoint {}".format(load_name))
         checkpoint = torch.load(load_name)
         fasterRCNN.load_state_dict(checkpoint['model'])
-        class_means = torch.from_numpy(checkpoint['cls_means'][:, :now_cls_high]).float()
+        class_means = checkpoint['cls_means'][:, :now_cls_high]
         cfg.POOLING_MODE = checkpoint['pooling_mode']
         tqdm.write('load model successfully!')
 
@@ -250,8 +251,8 @@ if __name__ == '__main__':
         ap = imdb.evaluate_detections(all_boxes, output_dir)
         aps.append(ap)
 
-    print("{0} RCNN {1} set Summary (mAP, AP, %) {0}".format(
-        "=" * 10, "Training" if args.self_check else "Test"))
+    print("{0} RCNN {1} set Summary (mAP, AP, %) {2}{0}".format(
+        "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group, x in enumerate(aps):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
@@ -260,8 +261,8 @@ if __name__ == '__main__':
             print("{:.2f}\t".format(y * 100), end="")
         print()
 
-    print("{0} RCNN {1} set Group Summary (mAP, AP, %) {0}".format(
-        "=" * 10, "Training" if args.self_check else "Test"))
+    print("{0} RCNN {1} set Group Summary (mAP, AP, %) {2}{0}".format(
+        "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group in range(cfg.CIOD.GROUPS):
         now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
         now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
