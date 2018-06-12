@@ -171,8 +171,9 @@ if __name__ == '__main__':
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)
-        if group:
-            set_learning_rate(optimizer, 0.0, special_params_index)
+        if cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN:
+            if group and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
+                set_learning_rate(optimizer, 0.0, special_params_index)
         fasterRCNN.train()
 
         # Get database
@@ -181,7 +182,8 @@ if __name__ == '__main__':
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, cfg.TRAIN.BATCH_SIZE, imdb.num_classes, training=True)
         dataloader = torch.utils.data.DataLoader(
-            dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch, num_workers=cfg.TRAIN.BATCH_SIZE * 2)
+            dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch,
+            num_workers=min(cfg.TRAIN.BATCH_SIZE * 2, os.cpu_count()))
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
 
         # Get weights from the previous group
@@ -216,10 +218,7 @@ if __name__ == '__main__':
                 rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-                if 0 == group:
-                    # Classification loss fix
-                    RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
-                else:
+                if (0 != group) and (cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN):
                     # Get result from the backup net
                     b_rois, b_cls_prob, b_bbox_pred, \
                     b_rpn_label, b_rpn_feature, b_rpn_cls_score, \
@@ -227,37 +226,41 @@ if __name__ == '__main__':
                     b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
                         = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-                    # RPN binary classification loss
-                    # Less-forgetting Learning in Deep Neural Networks (Equ 1)
-                    rpn_loss_cls_old = F.mse_loss(rpn_feature, b_rpn_feature)  # To make change small?
-                    rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
-                    rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
+                    if cfg.CIOD.SWITCH_DO_IN_RPN:
+                        # RPN binary classification loss
+                        # Less-forgetting Learning in Deep Neural Networks (Equ 1)
+                        rpn_loss_cls_old = F.mse_loss(rpn_feature, b_rpn_feature)  # To make change small?
+                        rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
+                        rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
 
-                    # Classification loss in Fast R-CNN
-                    # For old class, use knowledge distillation with KLDivLoss
-                    loss_cls_old = 0
-                    for index_old in group_merged_arr[group]:
-                        label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                        pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                        loss_cls_old += F.kl_div(torch.log(pred_old), label_old)
+                    if cfg.CIOD.SWITCH_DO_IN_FRCN:
+                        # Classification loss in Fast R-CNN
+                        # For old class, use knowledge distillation with KLDivLoss
+                        loss_frcn_cls_old = 0
+                        for index_old in group_merged_arr[group]:
+                            label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                            pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                            loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
 
-                    # For new classes, use cross entropy loss
-                    label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
-                    pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
-                    loss_cls_new = F.cross_entropy(pred_new, label_new)
+                        # For new classes, use cross entropy loss
+                        label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
+                        pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
+                        loss_frcn_cls_new = F.cross_entropy(pred_new, label_new)
 
-                    # Process class 0 (__background__)
-                    # If it is background class, we do not want to change it too much
-                    if cfg.CIOD.DISTILL_BACKGROUND:
-                        zero_label_mask = (rois_label == 0).nonzero().squeeze()
-                        label_zero_f = cls_score.index_select(0, zero_label_mask)
-                        pred_zero_f = cls_score.index_select(0, zero_label_mask)
-                        loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
+                        # Process class 0 (__background__)
+                        # If it is background class, we do not want to change it too much
+                        if cfg.CIOD.DISTILL_BACKGROUND:
+                            zero_label_mask = (rois_label == 0).nonzero().squeeze()
+                            label_zero_f = cls_score.index_select(0, zero_label_mask)
+                            pred_zero_f = cls_score.index_select(0, zero_label_mask)
+                            loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
 
-                    # Total classification loss
-                    RCNN_loss_cls = loss_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_cls_new
-                    if cfg.CIOD.DISTILL_BACKGROUND:
-                        RCNN_loss_cls += loss_cls_zero
+                        # Total classification loss
+                        RCNN_loss_cls = loss_frcn_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_frcn_cls_new
+                        if cfg.CIOD.DISTILL_BACKGROUND:
+                            RCNN_loss_cls += loss_cls_zero
+                else:
+                    RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
 
