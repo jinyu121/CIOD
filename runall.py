@@ -1,8 +1,9 @@
 import os
 import shutil
-from tqdm import tqdm, trange
-import torch
 from argparse import ArgumentParser
+
+import torch
+from tqdm import tqdm, trange
 
 parser = ArgumentParser(description='Train a Fast R-CNN network')
 parser.add_argument('-s', '--session', help='Session', type=int)
@@ -10,6 +11,8 @@ parser.add_argument('-a', '--all', action='store_true', help='All, or just One g
 parser.add_argument('-g', '--group', help='Group', type=int)
 parser.add_argument('-t', '--train', action='store_true', help='Train')
 parser.add_argument('-e', '--evaluate', action='store_true', help='Evaluate')
+parser.add_argument('-ap', '--append', action='store_true', help='Data append')
+parser.add_argument('-la', '--log_all', action='store_true', help='Log all')
 args = parser.parse_args()
 
 session = args.session
@@ -33,6 +36,12 @@ if args.all:
     sta, fin = 0, num_gropus + 1
 else:
     sta, fin = num_gropus, num_gropus + 1
+print("Will train {}".format(range(sta, fin)))
+
+if args.train:
+    delf("log_train_s{}.log".format(session))
+if args.evaluate:
+    delf("log_test_s{}.log".format(session))
 
 for group in trange(sta, fin):
     # clean train cache
@@ -41,7 +50,7 @@ for group in trange(sta, fin):
     delf(os.path.join(index_folder, "test.txt_annots.pkl"))
 
     # copy train file
-    src = os.path.join(index_folder, "trainvalStep{}.txt".format(group))
+    src = os.path.join(index_folder, "trainvalStep{}{}.txt".format(group, "a" if args.append else ""))
     dst = os.path.join(index_folder, "trainval.txt")
     delf(dst)
     shutil.copyfile(src, dst)
@@ -54,31 +63,32 @@ for group in trange(sta, fin):
 
     # train
     if args.train:
-        delf("log_train_s{}.log".format(session))
         tqdm.write("Group {} Train".format(group))
-        cmd = "python trainval_net.py --cuda --mGPUs \
-                           --dataset pascal_voc \
-                           --net res101 \
-                           --bs {} \
-                           --s {} \
-                           --nw 32 \
-                           --lr 0.001 \
-                           --epochs 10 \
-                           --lr_decay_step 8 \
-                           --group {} \
-                           --save_dir results  >> log_train_s{}.log".format(batch_size, session, group, session)
+        cmd = "python trainval_net.py \
+                    --cuda --mGPUs \
+                    --dataset pascal_voc \
+                    --net res101 \
+                    --bs {} \
+                    --s {} \
+                    --nw 32 \
+                    --lr 0.001 \
+                    --epochs 10 \
+                    --lr_decay_step 8 \
+                    --group {} \
+                    --save_dir results  >> log_train_s{}.log {}".format(batch_size, session, group, session,
+                                                                        "2>&1" if args.log_all else "")
         os.system(cmd)
 
     # test
     if args.evaluate:
-        delf("log_test_s{}.log".format(session))
         tqdm.write("Group {} Test".format(group))
-        cmd = "python test_net.py --dataset pascal_voc \
-                       --net res101 \
-                       --checksession {} \
-                       --group {} \
-                       --load_dir results \
-                       --cuda >> log_test_s{}.log".format(session, group, session)
+        cmd = "python test_net.py \
+                    --dataset pascal_voc \
+                    --net res101 \
+                    --checksession {} \
+                    --group {} \
+                    --load_dir results \
+                    --cuda >> log_test_s{}.log {}".format(session, group, session, "2>&1" if args.log_all else "")
         os.system(cmd)
 
     tqdm.write("Group {} Done".format(group))
