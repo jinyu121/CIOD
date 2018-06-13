@@ -113,7 +113,7 @@ if __name__ == '__main__':
     # Train ALL groups, or just ONE group
     start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)
 
-    for group in trange(start_group, end_group, desc="Group", leave=False):
+    for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
         now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
 
@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
         fasterRCNN.eval()
         data_iter = iter(dataloader)
-        for i in trange(num_images, desc="Iter", leave=False):
+        for i in trange(num_images, desc="Iter", leave=True):
             data = next(data_iter)
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])

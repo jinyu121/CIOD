@@ -164,7 +164,7 @@ if __name__ == '__main__':
     start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)
 
     # Now we enter the group loop
-    for group in trange(start_group, end_group, desc="Group", leave=False):
+    for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
@@ -195,7 +195,7 @@ if __name__ == '__main__':
         tot_step = 0
 
         # Here is the training loop
-        for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=False):
+        for epoch in trange(cfg.TRAIN.MAX_EPOCH, desc="Epoch", leave=True):
             loss_temp = 0
 
             if epoch % cfg.TRAIN.LEARNING_RATE_DECAY_STEP == 0 and epoch > 0:
@@ -203,7 +203,7 @@ if __name__ == '__main__':
                 lr *= cfg.TRAIN.LEARNING_RATE_DECAY_GAMMA
 
             data_iter = iter(dataloader)
-            for _ in trange(iters_per_epoch, desc="Iter", leave=False):
+            for _ in trange(iters_per_epoch, desc="Iter", leave=True):
                 tot_step += 1
                 data = next(data_iter)
                 im_data.data.resize_(data[0].size()).copy_(data[0])
@@ -324,7 +324,7 @@ if __name__ == '__main__':
         # Walk through all examples
         data_iter = iter(dataloader)
         # fasterRCNN.eval()
-        for _ in trange(iters_per_epoch, desc="Repr", leave=False):
+        for _ in trange(iters_per_epoch, desc="Repr", leave=True):
             data = next(data_iter)
             im_data.data.resize_(data[0].size()).copy_(data[0])
             im_info.data.resize_(data[1].size()).copy_(data[1])
