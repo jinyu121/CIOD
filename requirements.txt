@@ -5,3 +5,7 @@ scipy
 easydict
 matplotlib
 pyyaml
+tensorboardX
+tqdm
+torch
+torchvision
