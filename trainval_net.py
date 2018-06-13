@@ -56,6 +56,8 @@ def parse_args():
                         help='Whether use tensorflow tensorboard')
     parser.add_argument('--save_dir', dest='save_dir', nargs=argparse.REMAINDER, default="results",
                         help='Directory to save models')
+    parser.add_argument('--save_without_repr', dest='save_without_repr', action="store_true",
+                        help='Save the model before representation learning')
 
     # Other config to override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
@@ -303,19 +305,20 @@ if __name__ == '__main__':
 
                     loss_temp = 0
 
-        save_name = os.path.join(
-            output_dir,
-            'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
-        save_checkpoint({
-            'session': args.session,
-            'epoch': cfg.TRAIN.MAX_EPOCH,
-            'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'pooling_mode': cfg.POOLING_MODE,
-            'class_agnostic': args.class_agnostic,
-            'cls_means': 0,
-        }, save_name)
-        tqdm.write('save model: {}'.format(save_name))
+        if args.save_without_repr:
+            save_name = os.path.join(
+                output_dir,
+                'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
+            save_checkpoint({
+                'session': args.session,
+                'epoch': cfg.TRAIN.MAX_EPOCH,
+                'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'pooling_mode': cfg.POOLING_MODE,
+                'class_agnostic': args.class_agnostic,
+                'cls_means': 0,
+            }, save_name)
+            tqdm.write('save model: {}'.format(save_name))
 
         tqdm.write("===== Representation learning {} =====".format(group))
         repr_labels = []
