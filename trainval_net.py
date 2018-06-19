@@ -57,7 +57,7 @@ def parse_args():
                         help='Directory to save models')
     parser.add_argument('--save_without_repr', dest='save_without_repr', action="store_true",
                         help='Save the model before representation learning')
-
+    parser.add_argument('--repr', dest='repr', action="store_true", help='Do representation learning')
     # Other config to override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
 
@@ -302,67 +302,68 @@ if __name__ == '__main__':
 
                     loss_temp = 0
 
-        if args.save_without_repr:
-            save_name = os.path.join(
-                output_dir,
-                'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
-            save_checkpoint({
-                'session': args.session,
-                'epoch': cfg.TRAIN.MAX_EPOCH,
-                'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'pooling_mode': cfg.POOLING_MODE,
-                'class_agnostic': args.class_agnostic,
-                'cls_means': 0,
-            }, save_name)
-            tqdm.write('save model: {}'.format(save_name))
+        if args.repr:
+            if args.save_without_repr:  # We can save weights before representation learning
+                save_name = os.path.join(
+                    output_dir,
+                    'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
+                save_checkpoint({
+                    'session': args.session,
+                    'epoch': cfg.TRAIN.MAX_EPOCH,
+                    'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'pooling_mode': cfg.POOLING_MODE,
+                    'class_agnostic': args.class_agnostic,
+                    'cls_means': 0,
+                }, save_name)
+                tqdm.write('save model: {}'.format(save_name))
 
-        tqdm.write("===== Representation learning {} =====".format(group))
-        repr_labels = []
-        repr_features = []
+            tqdm.write("===== Representation learning {} =====".format(group))
+            repr_labels = []
+            repr_features = []
 
-        # Walk through all examples
-        data_iter = iter(dataloader)
-        # fasterRCNN.eval()
-        for _ in trange(iters_per_epoch, desc="Repr", leave=True):
-            data = next(data_iter)
-            im_data.data.resize_(data[0].size()).copy_(data[0])
-            im_info.data.resize_(data[1].size()).copy_(data[1])
-            gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-            num_boxes.data.resize_(data[3].size()).copy_(data[3])
+            # Walk through all examples
+            data_iter = iter(dataloader)
+            # fasterRCNN.eval()
+            for _ in trange(iters_per_epoch, desc="Repr", leave=True):
+                data = next(data_iter)
+                im_data.data.resize_(data[0].size()).copy_(data[0])
+                im_info.data.resize_(data[1].size()).copy_(data[1])
+                gt_boxes.data.resize_(data[2].size()).copy_(data[2])
+                num_boxes.data.resize_(data[3].size()).copy_(data[3])
 
-            fasterRCNN.zero_grad()
-            rois, cls_prob, bbox_pred, \
-            rpn_label, rpn_feature, rpn_cls_score, \
-            rois_label, pooled_feat, cls_score, \
-            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
-                = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-            fasterRCNN.zero_grad()
+                fasterRCNN.zero_grad()
+                rois, cls_prob, bbox_pred, \
+                rpn_label, rpn_feature, rpn_cls_score, \
+                rois_label, pooled_feat, cls_score, \
+                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
+                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+                fasterRCNN.zero_grad()
 
-            Dtmp = torch.t(pooled_feat)
-            Dtot = Dtmp / torch.norm(Dtmp)
-            repr_features.append(Dtot.data.cpu().numpy())
-            repr_labels.append(rois_label.data.cpu().numpy())
+                Dtmp = torch.t(pooled_feat)
+                Dtot = Dtmp / torch.norm(Dtmp)
+                repr_features.append(Dtot.data.cpu().numpy())
+                repr_labels.append(rois_label.data.cpu().numpy())
 
-        # Make representation of each class
-        Dtot = np.concatenate(repr_features, axis=1)
-        labels = np.concatenate(repr_labels, axis=0)
-        labels = labels.ravel()
+            # Make representation of each class
+            Dtot = np.concatenate(repr_features, axis=1)
+            labels = np.concatenate(repr_labels, axis=0)
+            labels = labels.ravel()
 
-        cls_sta = 0 if 0 == group else now_cls_low
+            cls_sta = 0 if 0 == group else now_cls_low
 
-        for ith in range(cls_sta, now_cls_high):
-            ind_cl = np.where(labels == ith)[0]
-            D = Dtot[:, ind_cl]
-            tmp_mean = np.mean(D, axis=1)
-            class_means[:, ith] = torch.from_numpy(tmp_mean / np.linalg.norm(tmp_mean))
+            for ith in range(cls_sta, now_cls_high):
+                ind_cl = np.where(labels == ith)[0]
+                D = Dtot[:, ind_cl]
+                tmp_mean = np.mean(D, axis=1)
+                class_means[:, ith] = torch.from_numpy(tmp_mean / np.linalg.norm(tmp_mean))
 
-        if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
-            save_name = os.path.join(
-                output_dir,
-                'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
-            pickle.dump(class_means, open("foo.pkl", "wb"))
-            assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
+            if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
+                save_name = os.path.join(
+                    output_dir,
+                    'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
+                pickle.dump(class_means, open("foo.pkl", "wb"))
+                assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
 
         # Save the model
         save_name = os.path.join(
