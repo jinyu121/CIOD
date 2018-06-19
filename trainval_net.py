@@ -176,10 +176,11 @@ if __name__ == '__main__':
         fasterRCNN.train()
 
         # Get database
-        imdb, roidb, ratio_list, ratio_index = combined_roidb(args.dataset, "trainvalStep{}".format(group))
+        imdb, roidb, ratio_list, ratio_index = combined_roidb(
+            args.dataset, "trainvalStep{}".format(group), cfg.CLASSES[:now_cls_high], cfg.EXT)
         train_size = len(roidb)
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, cfg.TRAIN.BATCH_SIZE, imdb.num_classes, training=True)
+        dataset = roibatchLoader(roidb, ratio_list, ratio_index, cfg.TRAIN.BATCH_SIZE, now_cls_high, training=True)
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch,
             num_workers=min(cfg.TRAIN.BATCH_SIZE * 2, os.cpu_count()))

@@ -119,7 +119,7 @@ if __name__ == '__main__':
         imdb, roidb, ratio_list, ratio_index = combined_roidb(
             args.dataset,
             "{}Step{}a".format("trainval" if args.self_check else "test", group),
-            training=False)
+            classes=cfg.CLASSES[:now_cls_high], ext=cfg.EXT, training=False)
         imdb.competition_mode(on=True)
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
 
@@ -138,7 +138,7 @@ if __name__ == '__main__':
         num_images = len(imdb.image_index)
         all_boxes = [[[] for _ in range(num_images)] for _ in range(imdb.num_classes)]
 
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=False, normalize=False)
+        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, now_cls_high, training=False, normalize=False)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=16, pin_memory=True)
 
         fasterRCNN.eval()
@@ -156,22 +156,19 @@ if __name__ == '__main__':
             rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
                 = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
+            cls_score = cls_score[:, :now_cls_high].contiguous()
+            bbox_pred = bbox_pred[..., :now_cls_high * 4].contiguous()
             if args.no_repr:
                 cls_prob = torch.zeros_like(cls_score)
-                cls_prob[:, :now_cls_high] = F.softmax(cls_score[:, :now_cls_high])
+                cls_prob = F.softmax(cls_score)
                 scores = cls_prob.view(im_data.size(0), rois.size(1), -1).data
             else:
                 # Representation classification
-                scores = torch.zeros_like(cls_score.data)
-                if cfg.CUDA:
-                    scores = scores.cuda()
+                scores = torch.zeros_like(cls_score)
                 features = torch.t(pooled_feat)
                 features = features / torch.norm(features)
                 scores[:, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
                 scores = F.softmax(Variable(scores), dim=-1).data
-
-            if group != cfg.CIOD.GROUPS - 1:  # Tiny fix
-                scores[:, now_cls_high:] = 0
 
             boxes = rois.data[:, :, 1:5]
 

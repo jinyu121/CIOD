@@ -3,11 +3,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np
-from model.utils.config import cfg
 import PIL
-from datasets.pascal_voc import pascal_voc
+import numpy as np
 from tqdm import tqdm
+
+from datasets.pascal_voc import pascal_voc
+from model.utils.config import cfg
 
 
 def prepare_roidb(imdb):
@@ -87,7 +88,7 @@ def filter_roidb(roidb):
     return roidb
 
 
-def combined_roidb(dataset_name, set_name, training=True):
+def combined_roidb(dataset_name, set_name, classes=None, ext=None, training=True):
     """
     Combine multiple roidbs
     """
@@ -108,7 +109,7 @@ def combined_roidb(dataset_name, set_name, training=True):
         return imdb.roidb
 
     # Get the roidb
-    imdb = pascal_voc(set_name, dataset_name)
+    imdb = pascal_voc(set_name, dataset_name, classes, ext)
     tqdm.write('Loaded dataset `{:s}` for training'.format(imdb.name))
     imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
     tqdm.write('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))

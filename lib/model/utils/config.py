@@ -17,6 +17,7 @@ cfg = __C
 
 __C.CLASSES = []
 __C.NUM_CLASSES = 0
+__C.EXT = ".jpg"
 
 #
 # Training options
