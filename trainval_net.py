@@ -21,11 +21,10 @@ from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
 import _init_paths
-from datasets.pascal_voc import pascal_voc
 from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
-from model.utils.config import cfg, cfg_from_file
+from model.utils.config import cfg, cfg_from_file, cfg_fix
 from model.utils.net_utils import adjust_learning_rate, set_learning_rate, save_checkpoint, clip_gradient
 from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new
 from roi_data_layer.roibatchLoader import roibatchLoader
@@ -83,9 +82,7 @@ if __name__ == '__main__':
     if args.config_file:
         cfg_from_file(args.config_file)
 
-    cfg.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
-    cfg.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
-    cfg.TRAIN.BATCH_SIZE = torch.cuda.device_count() * 3
+    cfg_fix()
 
     print('Using config:')
     pprint.pprint(cfg)
@@ -101,13 +98,13 @@ if __name__ == '__main__':
     gt_boxes = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
 
     # The representation classifier
-    class_means = torch.zeros(2048, cfg.CIOD.TOTAL_CLS + 1)
+    class_means = torch.zeros(2048, cfg.NUM_CLASSES + 1)
 
     # Get the net
     if args.net == 'vgg16':
-        fasterRCNN = vgg16(pascal_voc.classes, pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = vgg16(cfg.CLASSES, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net.startswith('res'):
-        fasterRCNN = resnet(pascal_voc.classes, int(args.net[3:]),
+        fasterRCNN = resnet(cfg.CLASSES, int(args.net[3:]),
                             pretrained=True, class_agnostic=args.class_agnostic)
     else:
         raise KeyError("Unknown Network")
@@ -160,7 +157,7 @@ if __name__ == '__main__':
         tqdm.write("Resume from {}".format(load_name))
 
     group_cls, group_cls_arr, group_merged_arr = ciod_old_and_new(
-        cfg.CIOD.TOTAL_CLS, cfg.CIOD.GROUPS, cfg.CIOD.DISTILL_GROUP)
+        cfg.NUM_CLASSES, cfg.CIOD.GROUPS, cfg.CIOD.DISTILL_GROUP)
 
     # Train ALL groups, or just ONE group
     start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)

@@ -22,6 +22,10 @@ CROP_RESIZE_WITH_MAX_POOL: False
 ANCHOR_SCALES: [8, 16, 32]
 ANCHOR_RATIOS: [0.5, 1, 2]
 MAX_NUM_GT_BOXES: 20
+CLASSES: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+          'bus', 'car', 'cat', 'chair', 'cow',
+          'diningtable', 'dog', 'horse', 'motorbike', 'person',
+          'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 CIOD:
   TOTAL_CLS: 20
   GROUPS: 4

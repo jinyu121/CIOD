@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import os.path as osp
+import torch
 # `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
 
@@ -13,6 +14,9 @@ __C = edict()
 # Consumers can get config by:
 #   from fast_rcnn_config import cfg
 cfg = __C
+
+__C.CLASSES = []
+__C.NUM_CLASSES = 0
 
 #
 # Training options
@@ -426,3 +430,11 @@ def cfg_from_list(cfg_list):
             'type {} does not match original type {}'.format(
                 type(value), type(d[subkey]))
         d[subkey] = value
+
+
+def cfg_fix():
+    __C.NUM_CLASSES = len(__C.CLASSES)
+    __C.CLASSES = tuple(['__background__'] + __C.CLASSES)
+    __C.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
+    __C.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
+    __C.TRAIN.BATCH_SIZE = torch.cuda.device_count() * 3

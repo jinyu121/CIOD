@@ -20,13 +20,12 @@ from torch.autograd import Variable
 from tqdm import tqdm, trange
 
 import _init_paths
-from datasets.pascal_voc import pascal_voc
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
-from model.utils.config import cfg, cfg_from_file, get_output_dir
+from model.utils.config import cfg, cfg_from_file, get_output_dir, cfg_fix
 from model.utils.net_utils import vis_detections, cdist, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
@@ -81,6 +80,7 @@ if __name__ == '__main__':
         cfg_from_file(args.config_file)
 
     cfg.TRAIN.USE_FLIPPED = False
+    cfg_fix()
 
     print('Using config:')
     pprint.pprint(cfg)
@@ -89,10 +89,9 @@ if __name__ == '__main__':
 
     # Get the net
     if args.net == 'vgg16':
-        fasterRCNN = vgg16(pascal_voc.classes, pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = vgg16(cfg.CLASSES, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net.startswith('res'):
-        fasterRCNN = resnet(pascal_voc.classes, int(args.net[3:]),
-                            pretrained=True, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(cfg.CLASSES, int(args.net[3:]), pretrained=False, class_agnostic=args.class_agnostic)
     else:
         raise KeyError("Unknown Network")
     fasterRCNN.create_architecture()
@@ -114,8 +113,8 @@ if __name__ == '__main__':
     start_group, end_group = (0, cfg.CIOD.GROUPS) if args.group == -1 else (args.group, args.group + 1)
 
     for group in trange(start_group, end_group, desc="Group", leave=True):
-        now_cls_low = cfg.CIOD.TOTAL_CLS * group // cfg.CIOD.GROUPS + 1
-        now_cls_high = cfg.CIOD.TOTAL_CLS * (group + 1) // cfg.CIOD.GROUPS + 1
+        now_cls_low = cfg.NUM_CLASSES * group // cfg.CIOD.GROUPS + 1
+        now_cls_high = cfg.NUM_CLASSES * (group + 1) // cfg.CIOD.GROUPS + 1
 
         imdb, roidb, ratio_list, ratio_index = combined_roidb(
             args.dataset,
@@ -254,8 +253,8 @@ if __name__ == '__main__':
     print("{0} RCNN {1} set Summary (mAP, AP, %) {2}{0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group, x in enumerate(aps):
-        now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
-        now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
+        now_classes_low = cfg.NUM_CLASSES * now_group // cfg.CIOD.GROUPS
+        now_classes_high = cfg.NUM_CLASSES * (now_group + 1) // cfg.CIOD.GROUPS
         print("{:.2f} :".format(np.mean(x[:now_classes_high]) * 100), end="\t")
         for y in x[:now_classes_high]:
             print("{:.2f}\t".format(y * 100), end="")
@@ -264,8 +263,8 @@ if __name__ == '__main__':
     print("{0} RCNN {1} set Group Summary (mAP, AP, %) {2}{0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group in range(cfg.CIOD.GROUPS):
-        now_classes_low = cfg.CIOD.TOTAL_CLS * now_group // cfg.CIOD.GROUPS
-        now_classes_high = cfg.CIOD.TOTAL_CLS * (now_group + 1) // cfg.CIOD.GROUPS
+        now_classes_low = cfg.NUM_CLASSES * now_group // cfg.CIOD.GROUPS
+        now_classes_high = cfg.NUM_CLASSES * (now_group + 1) // cfg.CIOD.GROUPS
         ans = []
         for x in range(now_group, cfg.CIOD.GROUPS):
             ans.append(np.mean(aps[x][now_classes_low:now_classes_high]) * 100.)
