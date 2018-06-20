@@ -138,7 +138,7 @@ if __name__ == '__main__':
         num_images = len(imdb.image_index)
         all_boxes = [[[] for _ in range(num_images)] for _ in range(imdb.num_classes)]
 
-        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, now_cls_high, training=False, normalize=False)
+        dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, imdb.num_classes, training=False, normalize=False)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=16, pin_memory=True)
 
         fasterRCNN.eval()
