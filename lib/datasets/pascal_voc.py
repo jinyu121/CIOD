@@ -268,7 +268,7 @@ class pascal_voc(imdb):
         for cls_ind, cls in enumerate(self.classes):
             if cls == '__background__':
                 continue
-            tqdm.write('Writing {} VOC results file'.format(cls))
+            # tqdm.write('Writing {} VOC results file'.format(cls))
             filename = self._get_voc_results_file_template().format(cls)
             with open(filename, 'wt') as f:
                 for im_ind, index in enumerate(self.image_index):
@@ -301,15 +301,18 @@ class pascal_voc(imdb):
         tqdm.write('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
+        tqdm.write(" | ".join(["cls", "ap", "gt", "tot", "correct", "wrong", "w_iou", "w_cls", "w_oth"]))
         for i, cls in enumerate(self._classes):
             if cls == '__background__':
                 continue
             filename = self._get_voc_results_file_template().format(cls)
-            rec, prec, ap = voc_eval(
+            rec, prec, ap, t_ngt, t_tot, t_cor, t_wro, t_iou, t_cls, t_oth = voc_eval(
                 filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5,
                 use_07_metric=use_07_metric)
             aps += [ap]
-            tqdm.write('AP for {} = {:.4f}'.format(cls, ap))
+            # tqdm.write('AP for {} = {:.4f}'.format(cls, ap))
+            tqdm.write(
+                ' | '.join("{:4}".format(x) for x in [cls, ap * 100, t_ngt, t_tot, t_cor, t_wro, t_iou, t_cls, t_oth]))
             with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
                 pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
         tqdm.write('Mean AP = {:.4f}'.format(np.mean(aps)))
@@ -320,12 +323,6 @@ class pascal_voc(imdb):
         tqdm.write('{:.3f}'.format(np.mean(aps)))
         tqdm.write('~~~~~~~~')
         tqdm.write('')
-        tqdm.write('--------------------------------------------------------------')
-        tqdm.write('Results computed with the **unofficial** Python eval code.')
-        tqdm.write('Results should be very close to the official MATLAB eval code.')
-        tqdm.write('Recompute with `./tools/reval.py --matlab ...` for your paper.')
-        tqdm.write('-- Thanks, The Management')
-        tqdm.write('--------------------------------------------------------------')
         return aps
 
     def _do_matlab_eval(self, output_dir='output'):

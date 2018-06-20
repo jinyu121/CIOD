@@ -247,7 +247,7 @@ if __name__ == '__main__':
         ap = imdb.evaluate_detections(all_boxes, output_dir)
         aps.append(ap)
 
-    print("{0} RCNN {1} set Summary (mAP, AP, %) {2}{0}".format(
+    print("{0} RCNN {1} set Summary (mAP, AP, %) {2} NEW {0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group, x in enumerate(aps):
         now_classes_low = cfg.NUM_CLASSES * now_group // cfg.CIOD.GROUPS
@@ -257,7 +257,7 @@ if __name__ == '__main__':
             print("{:.2f}\t".format(y * 100), end="")
         print()
 
-    print("{0} RCNN {1} set Group Summary (mAP, AP, %) {2}{0}".format(
+    print("{0} RCNN {1} set Group Summary (mAP, AP, %) NEW {2}{0}".format(
         "=" * 10, "Training" if args.self_check else "Test", "NOREPR " if args.no_repr else ""))
     for now_group in range(cfg.CIOD.GROUPS):
         now_classes_low = cfg.NUM_CLASSES * now_group // cfg.CIOD.GROUPS

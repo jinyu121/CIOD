@@ -7,9 +7,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import xml.etree.ElementTree as ET
 import os
 import pickle
+import xml.etree.ElementTree as ET
+
 import numpy as np
 
 
@@ -113,11 +114,11 @@ def voc_eval(detpath,
         recs = {}
         for i, imagename in enumerate(imagenames):
             recs[imagename] = parse_rec(annopath.format(imagename))
-            if i % 100 == 0:
-                print('Reading annotation for {:d}/{:d}'.format(
-                    i + 1, len(imagenames)))
+            # if i % 100 == 0:
+            #     print('Reading annotation for {:d}/{:d}'.format(
+            #         i + 1, len(imagenames)))
         # save
-        print('Saving cached annotations to {:s}'.format(cachefile))
+        # print('Saving cached annotations to {:s}'.format(cachefile))
         with open(cachefile, 'wb') as f:
             pickle.dump(recs, f)
     else:
@@ -131,11 +132,13 @@ def voc_eval(detpath,
     # extract gt objects for this class
     class_recs = {}
     npos = 0
+    gt_tot = 0
     for imagename in imagenames:
         R = [obj for obj in recs[imagename] if obj['name'] == classname]
         bbox = np.array([x['bbox'] for x in R])
         difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
         det = [False] * len(R)
+        gt_tot += len(R)
         npos = npos + sum(~difficult)
         class_recs[imagename] = {'bbox': bbox,
                                  'difficult': difficult,
@@ -154,6 +157,9 @@ def voc_eval(detpath,
     nd = len(image_ids)
     tp = np.zeros(nd)
     fp = np.zeros(nd)
+    fp_iou = np.zeros(nd, dtype=np.int)
+    fp_cls = np.zeros(nd, dtype=np.int)
+    fp_oth = np.zeros(nd, dtype=np.int)
 
     if BB.shape[0] > 0:
         # sort by confidence
@@ -196,8 +202,13 @@ def voc_eval(detpath,
                         R['det'][jmax] = 1
                     else:
                         fp[d] = 1.
+                        fp_oth[d] = 1
             else:
                 fp[d] = 1.
+                if ovmax > 0.1:
+                    fp_iou[d] = 1
+                else:
+                    fp_cls[d] = 1
 
     # compute precision recall
     fp = np.cumsum(fp)
@@ -208,4 +219,5 @@ def voc_eval(detpath,
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
     ap = voc_ap(rec, prec, use_07_metric)
 
-    return rec, prec, ap
+    return rec, prec, ap, \
+           gt_tot, nd, int(tp[-1]), int(fp[-1]), np.sum(fp_iou), np.sum(fp_cls), np.sum(fp_oth)
