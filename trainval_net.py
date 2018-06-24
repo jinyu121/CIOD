@@ -240,7 +240,12 @@ if __name__ == '__main__':
                         for index_old in group_merged_arr[group]:
                             label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
                             pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                            loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
+                            if cfg.CIOD.DISTILL_METHOD == 'kldiv':
+                                loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
+                            elif cfg.CIOD.DISTILL_METHOD == 'mse':
+                                loss_frcn_cls_old += F.mse_loss(pred_old, label_old)
+                            else:
+                                raise KeyError("Unknown distill method")
 
                         # For new classes, use cross entropy loss
                         label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
