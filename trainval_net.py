@@ -358,8 +358,8 @@ if __name__ == '__main__':
 
             Dtmp = torch.t(pooled_feat)
             Dtot = Dtmp / torch.norm(Dtmp)
-            repr_features.append(Dtot.data.cpu().numpy())
-            repr_labels.append(rois_label.data.cpu().numpy())
+            repr_features.append(Dtot.data.cpu().numpy().copy())
+            repr_labels.append(rois_label.data.cpu().numpy().copy())
             repr_images.extend(flatten([[x] * rois.shape[1] for x in im_path]))
 
         # Make representation of each class, and manage the examples
