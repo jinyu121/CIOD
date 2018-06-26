@@ -10,6 +10,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import numpy as np
 import numpy.random as npr
 from scipy.misc import imread
@@ -52,7 +54,7 @@ def get_minibatch(roidb, num_classes):
         dtype=np.float32)
 
     blobs['img_id'] = roidb[0]['img_id']
-    blobs['img_path'] = roidb[0]['image']
+    blobs['img_path'] = os.path.splitext(os.path.split(roidb[0]['image'])[-1])[0]
 
     return blobs
 

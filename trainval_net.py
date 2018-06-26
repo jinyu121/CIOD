@@ -156,6 +156,7 @@ if __name__ == '__main__':
         optimizer.load_state_dict(checkpoint['optimizer'])
         cfg.POOLING_MODE = checkpoint['pooling_mode']
         class_means = checkpoint['cls_means'].float()
+        class_proto = checkpoint['cls_proto']
         tqdm.write("Resume from {}".format(load_name))
 
     group_cls, group_cls_arr, group_merged_arr = ciod_old_and_new(
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     # Now we enter the group loop
     for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
-        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (group + 1))
+        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // now_cls_high)
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
@@ -326,6 +327,7 @@ if __name__ == '__main__':
                 'pooling_mode': cfg.POOLING_MODE,
                 'class_agnostic': args.class_agnostic,
                 'cls_means': 0,
+                'cls_proto': class_proto
             }, save_name)
             tqdm.write('save model: {}'.format(save_name))
 
@@ -358,14 +360,14 @@ if __name__ == '__main__':
             Dtot = Dtmp / torch.norm(Dtmp)
             repr_features.append(Dtot.data.cpu().numpy())
             repr_labels.append(rois_label.data.cpu().numpy())
-            repr_images.append(flatten([[x] * rois.shape[1] for x in im_path]))
+            repr_images.extend(flatten([[x] * rois.shape[1] for x in im_path]))
 
         # Make representation of each class, and manage the examples
         Dtot = np.concatenate(repr_features, axis=1)
         labels = np.concatenate(repr_labels, axis=0)
         labels = labels.ravel()
 
-        for ith in range(0, now_cls_high):
+        for ith in trange(0, now_cls_high, desc="ClsMean"):
             ind_cl = np.where(labels == ith)[0]
             D = Dtot[:, ind_cl]
             # Make class mean
@@ -373,7 +375,7 @@ if __name__ == '__main__':
             cls_mean = tmp_mean / np.linalg.norm(tmp_mean)
             class_means[:, ith] = torch.from_numpy(cls_mean)
             # Example manage
-            dis = np.sum((D - cls_mean) ** 2, axis=0)
+            dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
             sorted_index = dis.argsort()
             cls_set = set()
             for idx in sorted_index:
@@ -401,6 +403,7 @@ if __name__ == '__main__':
             'pooling_mode': cfg.POOLING_MODE,
             'class_agnostic': args.class_agnostic,
             'cls_means': class_means,
+            'cls_proto': class_proto
         }, save_name)
         tqdm.write('save model: {}'.format(save_name))
         print("{0} Group {1} Done {0}".format('=' * 10, group), end="\n" * 5)
