@@ -306,3 +306,13 @@ def ciod_old_and_new(tot_cls, tot_group, sep_group):
     group_merged_arr = [[tensor_holder(torch.from_numpy(np.array(x)), cfg.CUDA, True) for x in y] for y in
                         group_merged_arr]
     return group_cls, group_cls_arr, group_merged_arr
+
+
+def flatten(d):
+    ans = []
+    for x in d:
+        if isinstance(x, list):
+            ans.extend(flatten(x))
+        else:
+            ans.append(x)
+    return ans

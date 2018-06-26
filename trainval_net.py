@@ -26,7 +26,7 @@ from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.utils.config import cfg, cfg_from_file, cfg_fix
 from model.utils.net_utils import adjust_learning_rate, set_learning_rate, save_checkpoint, clip_gradient
-from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new
+from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new, flatten
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -99,6 +99,8 @@ if __name__ == '__main__':
 
     # The representation classifier
     class_means = torch.zeros(2048, cfg.NUM_CLASSES + 1)
+    # The iCaRL-like training procedure
+    class_proto = [[] for _ in range(cfg.CIOD.TOTAL_CLS + 1)]
 
     # Get the net
     if args.net == 'vgg16':
@@ -165,6 +167,7 @@ if __name__ == '__main__':
     # Now we enter the group loop
     for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
+        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (group + 1))
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
@@ -175,9 +178,11 @@ if __name__ == '__main__':
                 set_learning_rate(optimizer, 0.0, special_params_index)
         fasterRCNN.train()
 
-        # Get database
+        # Get database, and merge the class proto
         imdb, roidb, ratio_list, ratio_index = combined_roidb(
-            args.dataset, "trainvalStep{}".format(group), cfg.CLASSES[:now_cls_high], cfg.EXT)
+            args.dataset, "trainvalStep{}".format(group), classes=cfg.CLASSES[:now_cls_high], ext=cfg.EXT,
+            data_extra=flatten(class_proto[:now_cls_low]))
+
         train_size = len(roidb)
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
         dataset = roibatchLoader(roidb, ratio_list, ratio_index, cfg.TRAIN.BATCH_SIZE, now_cls_high, training=True)
@@ -210,6 +215,7 @@ if __name__ == '__main__':
                 im_info.data.resize_(data[1].size()).copy_(data[1])
                 gt_boxes.data.resize_(data[2].size()).copy_(data[2])
                 num_boxes.data.resize_(data[3].size()).copy_(data[3])
+                im_path = list(data[4])
 
                 fasterRCNN.zero_grad()
                 rois, cls_prob, bbox_pred, \
@@ -308,68 +314,80 @@ if __name__ == '__main__':
 
                     loss_temp = 0
 
-        if args.repr:
-            if args.save_without_repr:  # We can save weights before representation learning
-                save_name = os.path.join(
-                    output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
-                save_checkpoint({
-                    'session': args.session,
-                    'epoch': cfg.TRAIN.MAX_EPOCH,
-                    'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'pooling_mode': cfg.POOLING_MODE,
-                    'class_agnostic': args.class_agnostic,
-                    'cls_means': 0,
-                }, save_name)
-                tqdm.write('save model: {}'.format(save_name))
+        if args.save_without_repr:  # We can save weights before representation learning
+            save_name = os.path.join(
+                output_dir,
+                'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
+            save_checkpoint({
+                'session': args.session,
+                'epoch': cfg.TRAIN.MAX_EPOCH,
+                'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'pooling_mode': cfg.POOLING_MODE,
+                'class_agnostic': args.class_agnostic,
+                'cls_means': 0,
+            }, save_name)
+            tqdm.write('save model: {}'.format(save_name))
 
-            tqdm.write("===== Representation learning {} =====".format(group))
-            repr_labels = []
-            repr_features = []
+        tqdm.write("===== Representation learning {} =====".format(group))
+        repr_labels = []
+        repr_features = []
+        repr_images = []
+        repr_score = []
 
-            # Walk through all examples
-            data_iter = iter(dataloader)
-            # fasterRCNN.eval()
-            for _ in trange(iters_per_epoch, desc="Repr", leave=True):
-                data = next(data_iter)
-                im_data.data.resize_(data[0].size()).copy_(data[0])
-                im_info.data.resize_(data[1].size()).copy_(data[1])
-                gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-                num_boxes.data.resize_(data[3].size()).copy_(data[3])
+        # Walk through all examples
+        data_iter = iter(dataloader)
+        # fasterRCNN.eval()
+        for _ in trange(iters_per_epoch, desc="Repr", leave=True):
+            data = next(data_iter)
+            im_data.data.resize_(data[0].size()).copy_(data[0])
+            im_info.data.resize_(data[1].size()).copy_(data[1])
+            gt_boxes.data.resize_(data[2].size()).copy_(data[2])
+            num_boxes.data.resize_(data[3].size()).copy_(data[3])
+            im_path = list(data[4])
 
-                fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, \
-                rpn_label, rpn_feature, rpn_cls_score, \
-                rois_label, pooled_feat, cls_score, \
-                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
-                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-                fasterRCNN.zero_grad()
+            fasterRCNN.zero_grad()
+            rois, cls_prob, bbox_pred, \
+            rpn_label, rpn_feature, rpn_cls_score, \
+            rois_label, pooled_feat, cls_score, \
+            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
+                = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+            fasterRCNN.zero_grad()
 
-                Dtmp = torch.t(pooled_feat)
-                Dtot = Dtmp / torch.norm(Dtmp)
-                repr_features.append(Dtot.data.cpu().numpy())
-                repr_labels.append(rois_label.data.cpu().numpy())
+            Dtmp = torch.t(pooled_feat)
+            Dtot = Dtmp / torch.norm(Dtmp)
+            repr_features.append(Dtot.data.cpu().numpy())
+            repr_labels.append(rois_label.data.cpu().numpy())
+            repr_images.append(flatten([[x] * rois.shape[1] for x in im_path]))
 
-            # Make representation of each class
-            Dtot = np.concatenate(repr_features, axis=1)
-            labels = np.concatenate(repr_labels, axis=0)
-            labels = labels.ravel()
+        # Make representation of each class, and manage the examples
+        Dtot = np.concatenate(repr_features, axis=1)
+        labels = np.concatenate(repr_labels, axis=0)
+        labels = labels.ravel()
 
-            cls_sta = 0 if 0 == group else now_cls_low
+        for ith in range(0, now_cls_high):
+            ind_cl = np.where(labels == ith)[0]
+            D = Dtot[:, ind_cl]
+            # Make class mean
+            tmp_mean = np.mean(D, axis=1)
+            cls_mean = tmp_mean / np.linalg.norm(tmp_mean)
+            class_means[:, ith] = torch.from_numpy(cls_mean)
+            # Example manage
+            dis = np.sum((D - cls_mean) ** 2, axis=0)
+            sorted_index = dis.argsort()
+            cls_set = set()
+            for idx in sorted_index:
+                cls_set.add(repr_images[ind_cl[idx]])
+                if len(cls_set) >= max_proto:
+                    break
+            class_proto[ith] = list(cls_set)
 
-            for ith in range(cls_sta, now_cls_high):
-                ind_cl = np.where(labels == ith)[0]
-                D = Dtot[:, ind_cl]
-                tmp_mean = np.mean(D, axis=1)
-                class_means[:, ith] = torch.from_numpy(tmp_mean / np.linalg.norm(tmp_mean))
-
-            if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
-                save_name = os.path.join(
-                    output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
-                pickle.dump(class_means, open("foo.pkl", "wb"))
-                assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
+        if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
+            save_name = os.path.join(
+                output_dir,
+                'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
+            pickle.dump(class_means, open("foo.pkl", "wb"))
+            assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
 
         # Save the model
         save_name = os.path.join(

@@ -88,7 +88,7 @@ def filter_roidb(roidb):
     return roidb
 
 
-def combined_roidb(dataset_name, set_name, classes=None, ext=None, training=True):
+def combined_roidb(dataset_name, set_name, classes=None, ext=None, training=True, data_extra=None):
     """
     Combine multiple roidbs
     """
@@ -109,7 +109,7 @@ def combined_roidb(dataset_name, set_name, classes=None, ext=None, training=True
         return imdb.roidb
 
     # Get the roidb
-    imdb = pascal_voc(set_name, dataset_name, classes, ext)
+    imdb = pascal_voc(set_name, dataset_name, classes=classes, ext=ext, data_extra=data_extra)
     tqdm.write('Loaded dataset `{:s}` for training'.format(imdb.name))
     imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
     tqdm.write('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))

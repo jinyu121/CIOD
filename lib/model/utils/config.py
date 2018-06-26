@@ -335,6 +335,7 @@ __C.CIOD.NEW_CLS_LOSS_SCALE = 2.
 __C.CIOD.DISTILL_GROUP = False
 __C.CIOD.DISTILL_BACKGROUND = False
 __C.CIOD.DISTILL_METHOD = 'kldiv'
+__C.CIOD.TOTAL_PROTO = 200
 
 
 def get_output_dir(imdb, weights_filename):

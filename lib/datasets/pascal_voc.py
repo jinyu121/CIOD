@@ -37,7 +37,7 @@ except NameError:
 
 
 class pascal_voc(imdb):
-    def __init__(self, image_set, year, classes=None, ext=None, devkit_path=None):
+    def __init__(self, image_set, year, classes=None, ext=None, devkit_path=None, data_extra=None):
         imdb.__init__(self, 'voc_' + year + '_' + image_set)
         self._year = year
         self._image_set = image_set
@@ -51,6 +51,8 @@ class pascal_voc(imdb):
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
         self._image_ext = ext or '.jpg'
         self._image_index = self._load_image_set_index()
+        if data_extra:
+            self._image_index.extend(data_extra)
         # Default to roidb handler
         # self._roidb_handler = self.selective_search_roidb
         self._roidb_handler = self.gt_roidb

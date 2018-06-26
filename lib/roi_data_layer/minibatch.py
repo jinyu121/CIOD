@@ -13,9 +13,9 @@ from __future__ import print_function
 import numpy as np
 import numpy.random as npr
 from scipy.misc import imread
-from model.utils.config import cfg
+
 from model.utils.blob import prep_im_for_blob, im_list_to_blob
-import pdb
+from model.utils.config import cfg
 
 
 def get_minibatch(roidb, num_classes):
@@ -52,6 +52,7 @@ def get_minibatch(roidb, num_classes):
         dtype=np.float32)
 
     blobs['img_id'] = roidb[0]['img_id']
+    blobs['img_path'] = roidb[0]['image']
 
     return blobs
 
