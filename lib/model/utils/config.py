@@ -440,4 +440,4 @@ def cfg_fix():
     __C.CLASSES = tuple(['__background__'] + __C.CLASSES)
     __C.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
     __C.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
-    __C.TRAIN.BATCH_SIZE = torch.cuda.device_count() * 3
+    __C.TRAIN.BATCH_SIZE = max(1, torch.cuda.device_count()) * 3
