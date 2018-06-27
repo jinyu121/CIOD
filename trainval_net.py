@@ -168,7 +168,7 @@ if __name__ == '__main__':
     # Now we enter the group loop
     for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
-        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // now_cls_high)
+        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (now_cls_high - 1))
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
