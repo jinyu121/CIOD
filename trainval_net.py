@@ -377,13 +377,14 @@ if __name__ == '__main__':
                 class_means[:, ith] = torch.from_numpy(cls_mean)
                 # Example manage
                 dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
-                sorted_index = dis.argsort()
-                cls_set = set()
-                for idx in sorted_index:
-                    cls_set.add(repr_images[ind_cl[idx]])
-                    if len(cls_set) >= max_proto:
-                        break
-                class_proto[ith] = list(cls_set)
+                if ith:  # Do not save proto for background class, for it is too many
+                    sorted_index = dis.argsort()
+                    cls_set = set()
+                    for idx in sorted_index:
+                        cls_set.add(repr_images[ind_cl[idx]])
+                        if len(cls_set) >= max_proto:
+                            break
+                    class_proto[ith] = list(cls_set)
 
             if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
                 save_name = os.path.join(
