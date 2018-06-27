@@ -16,7 +16,6 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 from tqdm import tqdm, trange
 
 import _init_paths
@@ -168,7 +167,7 @@ if __name__ == '__main__':
                 features = torch.t(pooled_feat)
                 features = features / torch.norm(features)
                 scores[:, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
-                scores = F.softmax(Variable(scores), dim=-1).data
+                scores = F.softmax(scores, dim=-1).data
 
             boxes = rois.data[:, :, 1:5]
 
