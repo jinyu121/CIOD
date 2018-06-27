@@ -57,7 +57,6 @@ def parse_args():
                         help='Directory to save models')
     parser.add_argument('--save_without_repr', dest='save_without_repr', action="store_true",
                         help='Save the model before representation learning')
-    parser.add_argument('--repr', dest='repr', action="store_true", help='Do representation learning')
     # Other config to override
     parser.add_argument('--conf', dest='config_file', type=str, help='Other config(s) to override')
 
@@ -315,7 +314,7 @@ if __name__ == '__main__':
 
                     loss_temp = 0
 
-        if args.repr:
+        if cfg.CIOD.REPRESENTATION:
             if args.save_without_repr:  # We can save weights before representation learning
                 save_name = os.path.join(
                     output_dir,
@@ -377,7 +376,7 @@ if __name__ == '__main__':
                 class_means[:, ith] = torch.from_numpy(cls_mean)
                 # Example manage
                 dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
-                if ith:  # Do not save proto for background class, for it is too many
+                if ith and cfg.CIOD.REMEMBER_PROTO:  # Do not save proto for background class, for it is too many
                     sorted_index = dis.argsort()
                     cls_set = set()
                     for idx in sorted_index:
