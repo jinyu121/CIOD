@@ -160,7 +160,7 @@ if __name__ == '__main__':
             bbox_pred = bbox_pred[..., :now_cls_high * 4].contiguous()
             if args.no_repr:
                 cls_prob = torch.zeros_like(cls_score)
-                cls_prob = F.softmax(cls_score)
+                cls_prob = F.softmax(cls_score, dim=-1)
                 scores = cls_prob.view(im_data.size(0), rois.size(1), -1).data
             else:
                 # Representation classification
