@@ -1,8 +1,8 @@
 import pdb
-import random
 
 import cv2
 import numpy as np
+import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -308,11 +308,13 @@ def ciod_old_and_new(tot_cls, tot_group, sep_group):
     return group_cls, group_cls_arr, group_merged_arr
 
 
-def flatten(d):
+def flatten(d, distinct=False):
     ans = []
     for x in d:
         if isinstance(x, list):
-            ans.extend(flatten(x))
+            ans.extend(flatten(x, distinct))
         else:
             ans.append(x)
+    if distinct:
+        ans = list(set(ans))
     return ans

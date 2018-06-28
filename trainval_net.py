@@ -181,7 +181,7 @@ if __name__ == '__main__':
         # Get database, and merge the class proto
         imdb, roidb, ratio_list, ratio_index = combined_roidb(
             args.dataset, "trainvalStep{}".format(group), classes=cfg.CLASSES[:now_cls_high], ext=cfg.EXT,
-            data_extra=flatten(class_proto[:now_cls_low]))
+            data_extra=flatten(class_proto[:now_cls_low], distinct=True))
 
         train_size = len(roidb)
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
