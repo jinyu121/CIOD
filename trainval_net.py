@@ -9,9 +9,7 @@ from __future__ import print_function
 
 import argparse
 import os
-import pickle
 import pprint
-from copy import deepcopy
 
 import numpy as np
 import torch
@@ -26,7 +24,7 @@ from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
 from model.utils.config import cfg, cfg_from_file, cfg_fix
 from model.utils.net_utils import adjust_learning_rate, set_learning_rate, save_checkpoint, clip_gradient
-from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new, flatten
+from model.utils.net_utils import tensor_holder, ciod_old_and_new
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -101,63 +99,6 @@ if __name__ == '__main__':
     # The iCaRL-like training procedure
     class_proto = [[] for _ in range(cfg.CIOD.TOTAL_CLS + 1)]
 
-    # Get the net
-    if args.net == 'vgg16':
-        fasterRCNN = vgg16(cfg.CLASSES, pretrained=True, class_agnostic=args.class_agnostic)
-    elif args.net.startswith('res'):
-        fasterRCNN = resnet(cfg.CLASSES, int(args.net[3:]),
-                            pretrained=True, class_agnostic=args.class_agnostic)
-    else:
-        raise KeyError("Unknown Network")
-
-    fasterRCNN.create_architecture()
-    b_fasterRCNN = deepcopy(fasterRCNN)  # The backup net
-
-    if args.group > 0:  # If not train from the first group, We should load the weights here
-        load_name = os.path.join(
-            output_dir,
-            'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, args.group - 1))
-        checkpoint = torch.load(load_name)
-        fasterRCNN.load_state_dict(checkpoint['model'])
-
-    if cfg.CUDA:  # Send to GPU
-        if cfg.MGPU:
-            fasterRCNN = nn.DataParallel(fasterRCNN)
-            # b_fasterRCNN = nn.DataParallel(b_fasterRCNN)
-        fasterRCNN.cuda()
-        b_fasterRCNN.cuda()
-
-    # How to optimize
-    params = []
-    special_params_index = []
-    lr = cfg.TRAIN.LEARNING_RATE
-
-    for ith, (key, value) in enumerate(dict(fasterRCNN.named_parameters()).items()):  # since we froze some layers
-        if value.requires_grad:
-            if 'RCNN_rpn.RPN_cls_score' in key:  # Record the parameter position of RPN_cls_score
-                special_params_index.append(ith)
-
-            if 'bias' in key:
-                params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
-                            'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
-            else:
-                params += [{'params': [value], 'lr': lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
-
-    if cfg.TRAIN.OPTIMIZER == "adam":
-        lr = lr * 0.1
-        optimizer = torch.optim.Adam(params)
-    elif cfg.TRAIN.OPTIMIZER == "sgd":
-        optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
-    else:
-        raise KeyError("Unknown Optimizer")
-
-    if args.group > 0:  # And load the status here
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        cfg.POOLING_MODE = checkpoint['pooling_mode']
-        class_means = checkpoint['cls_means'].float()
-        class_proto = checkpoint['cls_proto']
-        tqdm.write("Resume from {}".format(load_name))
-
     group_cls, group_cls_arr, group_merged_arr = ciod_old_and_new(
         cfg.NUM_CLASSES, cfg.CIOD.GROUPS, cfg.CIOD.DISTILL_GROUP)
 
@@ -169,19 +110,55 @@ if __name__ == '__main__':
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
         max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (now_cls_high - 1))
 
+        # Get the net
+        if args.net == 'vgg16':
+            fasterRCNN = vgg16(cfg.CLASSES, pretrained=True, class_agnostic=args.class_agnostic)
+        elif args.net.startswith('res'):
+            fasterRCNN = resnet(cfg.CLASSES, int(args.net[3:]),
+                                pretrained=True, class_agnostic=args.class_agnostic)
+        else:
+            raise KeyError("Unknown Network")
+
+        fasterRCNN.create_architecture()
+
+        if cfg.CUDA:  # Send to GPU
+            if cfg.MGPU:
+                fasterRCNN = nn.DataParallel(fasterRCNN)
+            fasterRCNN.cuda()
+
+        # How to optimize
+        params = []
+        special_params_index = []
+        lr = cfg.TRAIN.LEARNING_RATE
+
+        for ith, (key, value) in enumerate(dict(fasterRCNN.named_parameters()).items()):  # since we froze some layers
+            if value.requires_grad:
+                if 'RCNN_rpn.RPN_cls_score' in key:  # Record the parameter position of RPN_cls_score
+                    special_params_index.append(ith)
+
+                if 'bias' in key:
+                    params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
+                                'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
+                else:
+                    params += [{'params': [value], 'lr': lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+
+        if cfg.TRAIN.OPTIMIZER == "adam":
+            lr = lr * 0.1
+            optimizer = torch.optim.Adam(params)
+        elif cfg.TRAIN.OPTIMIZER == "sgd":
+            optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
+        else:
+            raise KeyError("Unknown Optimizer")
+
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)
-        if cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN:
-            if group and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
-                set_learning_rate(optimizer, 0.0, special_params_index)
         fasterRCNN.train()
 
         # Get database, and merge the class proto
         imdb, roidb, ratio_list, ratio_index = combined_roidb(
-            args.dataset, "trainvalStep{}".format(group), classes=cfg.CLASSES[:now_cls_high], ext=cfg.EXT,
-            data_extra=flatten(class_proto[:now_cls_low], distinct=True))
+            args.dataset, "trainvalStep{}a".format(group), classes=cfg.CLASSES[:now_cls_high], ext=cfg.EXT)
 
         train_size = len(roidb)
         sampler_batch = RcnnSampler(train_size, cfg.TRAIN.BATCH_SIZE)
@@ -190,10 +167,6 @@ if __name__ == '__main__':
             dataset, batch_size=cfg.TRAIN.BATCH_SIZE, sampler=sampler_batch,
             num_workers=min(cfg.TRAIN.BATCH_SIZE * 2, os.cpu_count()))
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
-
-        # Get weights from the previous group
-        b_fasterRCNN.load_state_dict((fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict())
-        change_require_gradient(b_fasterRCNN, False)
 
         iters_per_epoch = train_size // cfg.TRAIN.BATCH_SIZE
 
@@ -224,54 +197,7 @@ if __name__ == '__main__':
                 rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-                if (0 != group) and (cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN):
-                    # Get result from the backup net
-                    b_rois, b_cls_prob, b_bbox_pred, \
-                    b_rpn_label, b_rpn_feature, b_rpn_cls_score, \
-                    b_rois_label, b_pooled_feat, b_cls_score, \
-                    b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
-                        = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-
-                    if cfg.CIOD.SWITCH_DO_IN_RPN:
-                        # RPN binary classification loss
-                        # Less-forgetting Learning in Deep Neural Networks (Equ 1)
-                        rpn_loss_cls_old = F.mse_loss(rpn_feature, b_rpn_feature)  # To make change small?
-                        rpn_loss_cls_new = F.cross_entropy(rpn_cls_score, rpn_label)
-                        rpn_loss_cls = cfg.CIOD.RPN_CLS_LOSS_SCALE_FEATURE * rpn_loss_cls_old + rpn_loss_cls_new
-
-                    if cfg.CIOD.SWITCH_DO_IN_FRCN:
-                        # Classification loss in Fast R-CNN
-                        # For old class, use knowledge distillation with KLDivLoss
-                        loss_frcn_cls_old = 0
-                        for index_old in group_merged_arr[group]:
-                            label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                            pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                            if cfg.CIOD.DISTILL_METHOD == 'kldiv':
-                                loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
-                            elif cfg.CIOD.DISTILL_METHOD == 'mse':
-                                loss_frcn_cls_old += F.mse_loss(pred_old, label_old)
-                            else:
-                                raise KeyError("Unknown distill method")
-
-                        # For new classes, use cross entropy loss
-                        label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
-                        pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
-                        loss_frcn_cls_new = F.cross_entropy(pred_new, label_new)
-
-                        # Process class 0 (__background__)
-                        # If it is background class, we do not want to change it too much
-                        if cfg.CIOD.DISTILL_BACKGROUND:
-                            zero_label_mask = (rois_label == 0).nonzero().squeeze()
-                            label_zero_f = cls_score.index_select(0, zero_label_mask)
-                            pred_zero_f = cls_score.index_select(0, zero_label_mask)
-                            loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
-
-                        # Total classification loss
-                        RCNN_loss_cls = loss_frcn_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_frcn_cls_new
-                        if cfg.CIOD.DISTILL_BACKGROUND:
-                            RCNN_loss_cls += loss_cls_zero
-                else:
-                    RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
+                RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
 
@@ -313,84 +239,6 @@ if __name__ == '__main__':
                             logger.add_scalar("Group{}/{}".format(group, tag), value, tot_step)
 
                     loss_temp = 0
-
-        if cfg.CIOD.REPRESENTATION:
-            if args.save_without_repr:  # We can save weights before representation learning
-                save_name = os.path.join(
-                    output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
-                save_checkpoint({
-                    'session': args.session,
-                    'epoch': cfg.TRAIN.MAX_EPOCH,
-                    'model': (fasterRCNN.module if cfg.MGPU else fasterRCNN).state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'pooling_mode': cfg.POOLING_MODE,
-                    'class_agnostic': args.class_agnostic,
-                    'cls_means': 0,
-                    'cls_proto': class_proto
-                }, save_name)
-                tqdm.write('save model before representation learning: {}'.format(save_name))
-
-            tqdm.write("===== Representation learning {} =====".format(group))
-            repr_labels = []
-            repr_features = []
-            repr_images = []
-            repr_score = []
-
-            # Walk through all examples
-            data_iter = iter(dataloader)
-            # fasterRCNN.eval()
-            for _ in trange(iters_per_epoch, desc="Repr", leave=True):
-                data = next(data_iter)
-                im_data.data.resize_(data[0].size()).copy_(data[0])
-                im_info.data.resize_(data[1].size()).copy_(data[1])
-                gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-                num_boxes.data.resize_(data[3].size()).copy_(data[3])
-                im_path = list(data[4])
-
-                fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, \
-                rpn_label, rpn_feature, rpn_cls_score, \
-                rois_label, pooled_feat, cls_score, \
-                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
-                    = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-                fasterRCNN.zero_grad()
-
-                Dtmp = torch.t(pooled_feat)
-                Dtot = Dtmp / torch.norm(Dtmp)
-                repr_features.append(Dtot.data.cpu().numpy().copy())
-                repr_labels.append(rois_label.data.cpu().numpy().copy())
-                repr_images.extend(flatten([[x] * rois.shape[1] for x in im_path]))
-
-            # Make representation of each class, and manage the examples
-            Dtot = np.concatenate(repr_features, axis=1)
-            labels = np.concatenate(repr_labels, axis=0)
-            labels = labels.ravel()
-
-            for ith in trange(0, now_cls_high, desc="ClsMean"):
-                ind_cl = np.where(labels == ith)[0]
-                D = Dtot[:, ind_cl]
-                # Make class mean
-                tmp_mean = np.mean(D, axis=1)
-                cls_mean = tmp_mean / np.linalg.norm(tmp_mean)
-                class_means[:, ith] = torch.from_numpy(cls_mean)
-                # Example manage
-                dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
-                if ith and cfg.CIOD.REMEMBER_PROTO:  # Do not save proto for background class, for it is too many
-                    sorted_index = dis.argsort()
-                    cls_set = set()
-                    for idx in sorted_index:
-                        cls_set.add(repr_images[ind_cl[idx]])
-                        if len(cls_set) >= max_proto:
-                            break
-                    class_proto[ith] = list(cls_set)
-
-            if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
-                save_name = os.path.join(
-                    output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
-                pickle.dump(class_means, open("foo.pkl", "wb"))
-                assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
 
         # Save the model
         save_name = os.path.join(
