@@ -19,6 +19,7 @@ sets_full_name = {"tra": "trainval", "val": "test"}
 
 filename = {"tra": "{}.{}".format(cfg.imdb_train, "json"), "val": "{}.{}".format(cfg.imdb_test, "json")}
 total_json = {x: json.load(open(os.path.join(cfg.base_dir, filename[x]))) for x in sets_name}
+result_json = {x: {} for x in sets_name}
 
 cfg.label_names = sorted([x['id'] for x in total_json['val']['categories']])
 counters = {x: Counter() for x in sets_name}
@@ -66,8 +67,20 @@ for group in range(cfg.nb_groups):
         print(stage.capitalize(), "...")
         data = copy.deepcopy(total_json[stage])
         data, cnt = sel(data, label_range)
-        json.dump(data, open(os.path.join(cfg.base_dir, '{}Step{}.json'.format(sets_full_name[stage], group)), "w"))
+        # ==========
         print(cnt)
         counters[stage] += cnt
+        # ==========
+        json.dump(data,
+                  open(os.path.join(cfg.base_dir, '{}Step{}.json'.format(sets_full_name[stage], group)), "w"))
+        # ==========
+        if 0 == group:
+            result_json[stage] = data
+        else:
+            for k in result_json[stage]:
+                if isinstance(result_json[stage][k], list):
+                    result_json[stage][k] += data[k]
+        json.dump(result_json[stage],
+                  open(os.path.join(cfg.base_dir, '{}Step{}a.json'.format(sets_full_name[stage], group)), "w"))
 
 print(counters)
