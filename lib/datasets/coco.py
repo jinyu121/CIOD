@@ -7,26 +7,26 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from datasets.imdb import imdb
-import datasets.ds_utils as ds_utils
-from model.utils.config import cfg
-import os.path as osp
-import sys
-import os
-import numpy as np
-import scipy.sparse
-import scipy.io as sio
-import pickle
 import json
+import os
+import pickle
+import time
 import uuid
+
+import numpy as np
+import os.path as osp
+import scipy.sparse
+
+import datasets.ds_utils as ds_utils
+from datasets.imdb import imdb
+from model.utils.config import cfg
 # COCO API
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-from pycocotools import mask as COCOmask
 
 
 class coco(imdb):
-    def __init__(self, image_set, year):
+    def __init__(self, image_set, year, classes=None, ext=None, devkit_path=None, data_extra=None):
         imdb.__init__(self, 'coco_' + year + '_' + image_set)
         # COCO specific config options
         self.config = {'use_salt': True,
@@ -36,12 +36,12 @@ class coco(imdb):
         self._image_set = image_set
         self._data_path = osp.join(cfg.DATA_DIR, 'coco')
         # load COCO API, classes, class <-> id mappings
-        self._COCO = COCO(self._get_ann_file())
+        tmp_filename = self.pre_process(classes, data_extra)
+        self._COCO = COCO(tmp_filename)
         cats = self._COCO.loadCats(self._COCO.getCatIds())
         self._classes = tuple(['__background__'] + [c['name'] for c in cats])
         self._class_to_ind = dict(list(zip(self.classes, list(range(self.num_classes)))))
-        self._class_to_coco_cat_id = dict(list(zip([c['name'] for c in cats],
-                                                   self._COCO.getCatIds())))
+        self._class_to_coco_cat_id = dict(list(zip([c['name'] for c in cats], self._COCO.getCatIds())))
         self._image_index = self._load_image_set_index()
         # Default to roidb handler
         self.set_proposal_method('gt')
@@ -65,6 +65,40 @@ class coco(imdb):
         # Dataset splits that have ground-truth annotations (test splits
         # do not have gt annotations)
         self._gt_splits = ('train', 'val', 'minival')
+
+    def pre_process(self, classes, data_extra):
+        total_file = json.load(open(osp.join(self._data_path, 'annotations', 'instances_train2017.json')))
+        data = json.load(open(osp.join(self._data_path, 'annotations', "{}.json".format(self._year))))
+        if classes or data_extra:
+            pic_arr = {im['id']: im for im in data['images']}
+
+            if classes:  # Limit classes
+                data['categories'] = [c for c in data['categories'] if c['name'] in classes]
+                cls_id_arr = [c['id'] for c in data['categories']]
+                for anno in data['annotations']:
+                    if anno['category_id'] not in cls_id_arr:
+                        if anno['image_id'] in pic_arr:
+                            del pic_arr[anno['image_id']]
+
+            if data_extra:  # Add extra images, without the limit before
+                data['annotations'] += [anno for anno in total_file['annotations'] if
+                                        anno['image_id'] in data_extra]
+                pic_arr.update({im['id']: im for im in total_file['images'] if im['id'] in data_extra})
+
+            # Filter the annotations
+            data['annotations'] = [x for x in data['annotations'] if x['image_id'] in pic_arr]
+
+            # Get the classes now
+            classes = set([x['category_id'] for x in data['annotations']])
+
+            # Fix the dataset
+            data['annotations'] = [x for x in data['annotations'] if x['category_id'] in classes]
+            data['images'] = [v for k, v in pic_arr.items()]
+            data['categories'] = [c for c in total_file['categories'] if c['id'] in classes]
+
+        filename = osp.join("/tmp", "coco.tmp.{}.json".format(time.time()))
+        json.dump(data, open(filename, "w"))
+        return filename
 
     def _get_ann_file(self):
         prefix = 'instances' if self._image_set.find('test') == -1 \

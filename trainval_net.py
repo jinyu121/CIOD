@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--group', dest='group', type=int, default=-1, help='Train certain group, or all (-1) groups')
 
     # Config the session
-    parser.add_argument('--dataset', dest='dataset', default='2007', type=str, help='Training dataset, in VOC format')
+    parser.add_argument('--dataset', dest='dataset', default='coco', type=str, help='Training dataset, in VOC format')
 
     # Config the net
     parser.add_argument('--net', dest='net', default='res101', type=str, help='vgg16, res101')

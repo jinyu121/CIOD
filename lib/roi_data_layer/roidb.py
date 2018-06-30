@@ -7,7 +7,7 @@ import PIL
 import numpy as np
 from tqdm import tqdm
 
-from datasets.pascal_voc import pascal_voc
+from datasets.coco import coco
 from model.utils.config import cfg
 
 
@@ -109,7 +109,7 @@ def combined_roidb(dataset_name, set_name, classes=None, ext=None, training=True
         return imdb.roidb
 
     # Get the roidb
-    imdb = pascal_voc(set_name, dataset_name, classes=classes, ext=ext, data_extra=data_extra)
+    imdb = coco(set_name, dataset_name, classes=classes, ext=ext, data_extra=data_extra)
     tqdm.write('Loaded dataset `{:s}` for training'.format(imdb.name))
     imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
     tqdm.write('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))
