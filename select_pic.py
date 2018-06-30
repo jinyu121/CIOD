@@ -1,110 +1,73 @@
+import copy
+import json
 import os
-from pprint import pprint
-from random import random
+from collections import Counter
 
 from easydict import EasyDict
-from xmltodict import parse
 
 cfg = EasyDict({
-    "base_dir": os.path.join('data', 'VOCdevkit2007', 'VOC2007'),
+    "base_dir": os.path.join('data', 'coco', 'annotations'),
     "nop_limit": 10000,
-    "imdb_train": "voc_2007_trainval",
-    "imdb_test": "voc_2007_test",
-    "max_pic_train": 5,
-    "max_pic_eval": 5,
-    "label_names": ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
-                    'bus', 'car', 'cat', 'chair', 'cow',
-                    'diningtable', 'dog', 'horse', 'motorbike', 'person',
-                    'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'],
-    "nb_groups": 4,
-    "factor": 0.
+    "imdb_train": "instances_train2017",
+    "imdb_test": "instances_val2017",
+    "label_names": [],
+    "nb_groups": 4
 })
 
-txt_base = os.path.join(cfg.base_dir, 'ImageSets', 'Main')
-ann_base = os.path.join(cfg.base_dir, 'Annotations')
-
 sets_name = ["tra", "val"]
-sets_full_name = {
-    "tra": "trainval",
-    "val": "test"
-}
+sets_full_name = {"tra": "trainval", "val": "test"}
 
-nop_limit = cfg.nop_limit  # Abandon after many `do nothing`s
+filename = {"tra": "{}.{}".format(cfg.imdb_train, "json"), "val": "{}.{}".format(cfg.imdb_test, "json")}
+total_json = {x: json.load(open(os.path.join(cfg.base_dir, filename[x]))) for x in sets_name}
 
-filename = {
-    "tra": "{}.{}".format(cfg.imdb_train.split('_')[-1], "txt"),
-    "val": "{}.{}".format(cfg.imdb_test.split('_')[-1], "txt")
-}
-
-max_pic = {
-    "tra": cfg.max_pic_train,
-    "val": cfg.max_pic_eval
-}
-
-total_file = {"tra": [], "val": []}
-
-txt = {k: [x.strip() for x in open(os.path.join(txt_base, filename[k]))] for k in sets_name}
-counter = {k: {x: 0 for x in cfg.label_names} for k in sets_name}
+cfg.label_names = sorted([x['id'] for x in total_json['val']['categories']])
+counters = {x: Counter() for x in sets_name}
 
 
-def sel(file_set, pic_max, cls_low, cls_hig, tol):
-    counter_batch = {k: 0 for k in cfg.label_names}
-    remain = set([k for k in cfg.label_names if cls_low <= cfg.label_names.index(k) < cls_hig])
-    result = []
-    do_nothing = 0
-    while len(remain) or (len(result) < pic_max and do_nothing < nop_limit):
-        do_nothing += 1
-        line = file_set.pop(0)
+def sel(data, cls_range):
+    print("Before: Image {}, Object {}".format(len(data['images']), len(data['annotations'])))
 
-        anno_path = os.path.join(ann_base, '{}.xml'.format(line))
-        objs = parse(open(anno_path).read())['annotation']['object']
-        objs = objs if isinstance(objs, list) else [objs]
-        obj_cls = list(set([o['name'] for o in objs]))
+    anno_pool = data['annotations']
+    image_pool = {x['id']: x for x in data['images']}
 
-        for name in obj_cls:
-            if cfg.label_names.index(name) >= cls_hig:  # 1. Class range
-                file_set.append(line)
-                break
-            if counter_batch[name] > pic_max:  # 2. Number of images
-                file_set.append(line)
-                break
-            if cfg.label_names.index(name) < cls_low and random() > tol:  # 3, Leaky
-                file_set.append(line)
-                break
-        else:
-            result.append(line)
-            for name in obj_cls:
-                counter_batch[name] += 1
-            remain.discard(name)
-            do_nothing = 0
-    return result, counter_batch, file_set
+    # Clean images who contain objects that not in range
+    for anno in anno_pool:
+        if anno['category_id'] not in cls_range:
+            image_id = anno['image_id']
+            if image_id in image_pool:
+                del image_pool[image_id]
 
+    # Double check: Delete objects who do not have father
+    anno_pool = [anno for anno in anno_pool if anno['image_id'] in image_pool]
+    reverse_pool = set(anno['image_id'] for anno in anno_pool)
 
-def write_to_file(fnm, data):
-    with open(fnm, 'w') as f:
-        f.writelines(["{}\n".format(x) for x in data])
+    # Triple check if image have annotation
+    image_pool = {k: v for k, v in image_pool.items() if k in reverse_pool}
+
+    data['images'] = [v for k, v in image_pool.items()]
+    data['annotations'] = anno_pool
+    data['categories'] = [x for x in data['categories'] if x['id'] in cls_range]
+
+    print("After: Image {}, Object {}".format(len(data['images']), len(data['annotations'])))
+    d = [x['category_id'] for x in data['annotations']]
+    counter = Counter(d)
+
+    return data, counter
 
 
 for group in range(cfg.nb_groups):
     print('=' * 10, "Group", group, '=' * 10)
     sta = int(len(cfg.label_names) * 1. / cfg.nb_groups * group)
     fin = int(len(cfg.label_names) * 1. / cfg.nb_groups * (group + 1))
+    label_range = cfg.label_names[sta:fin]
+    print(len(label_range), label_range)
 
     for stage in sets_name:
-        print(stage.capitalize(), end="...")
-        files, counter_g, txt[stage] = sel(txt[stage], max_pic[stage], sta, fin, cfg.factor / (group + 1))
-        print("OK")
+        print(stage.capitalize(), "...")
+        data = copy.deepcopy(total_json[stage])
+        data, cnt = sel(data, label_range)
+        json.dump(data, open(os.path.join(cfg.base_dir, '{}Step{}.json'.format(sets_full_name[stage], group)), "w"))
+        print(cnt)
+        counters[stage] += cnt
 
-        print(len(files), counter_g)
-
-        total_file[stage] += files
-
-        for k, v in counter_g.items():
-            counter[stage][k] += v
-
-        write_to_file(os.path.join(txt_base, '{}Step{}.txt'.format(sets_full_name[stage], group)), files)
-        write_to_file(os.path.join(txt_base, '{}Step{}a.txt'.format(sets_full_name[stage], group)), total_file[stage])
-
-print('=' * 10, "Summary", '=' * 10)
-print("\t".join(["{}:{}".format(x, len(total_file[x])) for x in sets_name]))
-pprint(counter)
+print(counters)
