@@ -59,17 +59,24 @@ class coco(imdb):
             'captest2014': 'val2014'
         }
         coco_name = image_set + year  # e.g., "val2014"
-        self._data_name = (self._view_map[coco_name]
-                           if coco_name in self._view_map
-                           else coco_name)
+        self._data_name = (self._view_map[coco_name] if coco_name in self._view_map else coco_name)
+        if self._image_set.startswith("trainval"):
+            self._data_name = "train{}".format(self._year)
+        elif self._image_set.startswith("test"):
+            self._data_name = "val{}".format(self._year)
+        else:
+            pass
         # Dataset splits that have ground-truth annotations (test splits
         # do not have gt annotations)
         self._gt_splits = ('train', 'val', 'minival')
 
     def pre_process(self, classes, data_extra):
-        total_file = json.load(open(osp.join(self._data_path, 'annotations', 'instances_train2017.json')))
-        data = json.load(open(osp.join(self._data_path, 'annotations', "{}.json".format(self._year))))
+        print("Preparing dataset...")
+
+        data = json.load(open(osp.join(self._data_path, 'annotations', "{}.json".format(self._image_set))))
+
         if classes or data_extra:
+            total_file = json.load(open(osp.join(self._data_path, 'annotations', 'instances_train2017.json')))
             pic_arr = {im['id']: im for im in data['images']}
 
             if classes:  # Limit classes
@@ -81,6 +88,7 @@ class coco(imdb):
                             del pic_arr[anno['image_id']]
 
             if data_extra:  # Add extra images, without the limit before
+                data_extra = [int(x) for x in data_extra]
                 data['annotations'] += [anno for anno in total_file['annotations'] if
                                         anno['image_id'] in data_extra]
                 pic_arr.update({im['id']: im for im in total_file['images'] if im['id'] in data_extra})
@@ -136,8 +144,9 @@ class coco(imdb):
         """
         # Example image path for index=119993:
         #   images/train2014/COCO_train2014_000000119993.jpg
-        file_name = ('COCO_' + self._data_name + '_' +
-                     str(index).zfill(12) + '.jpg')
+        # file_name = ('COCO_' + self._data_name + '_' +
+        #              str(index).zfill(12) + '.jpg')
+        file_name = str(index).zfill(12) + '.jpg'
         image_path = osp.join(self._data_path, 'images',
                               self._data_name, file_name)
         assert osp.exists(image_path), \

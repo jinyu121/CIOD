@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--group', dest='group', type=int, default=-1, help='Train certain group, or all (-1) groups')
 
     # Config the session
-    parser.add_argument('--dataset', dest='dataset', default='coco', type=str, help='Training dataset, in VOC format')
+    parser.add_argument('--dataset', dest='dataset', default='2017', type=str, help='Training dataset, in VOC format')
 
     # Config the net
     parser.add_argument('--net', dest='net', default='res101', type=str, help='vgg16, res101')
@@ -75,8 +75,8 @@ if __name__ == '__main__':
 
         logger = SummaryWriter(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))
 
-    args.imdb_name = "voc_{}_trainval".format(args.dataset)
-    args.imdbval_name = "voc_{}_test".format(args.dataset)
+    args.imdb_name = "coco_{}_trainval".format(args.dataset)
+    args.imdbval_name = "coco_{}_test".format(args.dataset)
     cfg_from_file("cfgs/{}{}.yml".format(args.net, "_ls" if args.large_scale else ""))
     if args.config_file:
         cfg_from_file(args.config_file)
