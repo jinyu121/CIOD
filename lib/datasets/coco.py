@@ -354,7 +354,7 @@ class coco(imdb):
         res_file += '.json'
         self._write_coco_results_file(all_boxes, res_file)
         # Only do evaluation on non-test sets
-        if self._image_set.find('test') == -1:
+        if self._image_set.find('test') != -1:
             self._do_detection_eval(res_file, output_dir)
         # Optionally cleanup results json file
         if self.config['cleanup']:

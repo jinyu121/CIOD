@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument('--group', dest='group', type=int, default=-1, help='Train certain group, or all (-1) groups')
 
     # Config the dataset
-    parser.add_argument('--dataset', dest='dataset', type=str, default='2007', help='training dataset')
+    parser.add_argument('--dataset', dest='dataset', type=str, default='2017', help='training dataset')
     parser.add_argument('--sc', dest='self_check', action='store_true', help='Self check: test on training set')
 
     # Config the net
