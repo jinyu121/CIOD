@@ -18,6 +18,8 @@ sets_name = ["tra", "val"]
 sets_full_name = {"tra": "trainval", "val": "test"}
 
 filename = {"tra": "{}.{}".format(cfg.imdb_train, "json"), "val": "{}.{}".format(cfg.imdb_test, "json")}
+
+print("Loading annotation files... This may take a while")
 total_json = {x: json.load(open(os.path.join(cfg.base_dir, filename[x]))) for x in sets_name}
 result_json = {x: {} for x in sets_name}
 
@@ -60,10 +62,14 @@ for group in range(cfg.nb_groups):
     print('=' * 10, "Group", group, '=' * 10)
     sta = int(len(cfg.label_names) * 1. / cfg.nb_groups * group)
     fin = int(len(cfg.label_names) * 1. / cfg.nb_groups * (group + 1))
-    label_range = cfg.label_names[sta:fin]
-    print(len(label_range), label_range)
+
+    label_range_tra = cfg.label_names[sta:fin]
+    label_range_val = cfg.label_names[:fin]  # If we do not do this, some class will have only one image
 
     for stage in sets_name:
+        label_range = label_range_tra if "tra" == stage else label_range_val
+
+        print(len(label_range), label_range)
         print(stage.capitalize(), "...")
         data = copy.deepcopy(total_json[stage])
         data, cnt = sel(data, label_range)
@@ -74,13 +80,16 @@ for group in range(cfg.nb_groups):
         json.dump(data,
                   open(os.path.join(cfg.base_dir, '{}Step{}.json'.format(sets_full_name[stage], group)), "w"))
         # ==========
-        if 0 == group:
-            result_json[stage] = data
-        else:
-            for k in result_json[stage]:
-                if isinstance(result_json[stage][k], list):
-                    result_json[stage][k] += data[k]
-        json.dump(result_json[stage],
-                  open(os.path.join(cfg.base_dir, '{}Step{}a.json'.format(sets_full_name[stage], group)), "w"))
-
+        if "tra" == stage:  # Merge the training data
+            if 0 == group:
+                result_json[stage] = data
+            else:
+                for k in result_json[stage]:
+                    if isinstance(result_json[stage][k], list):
+                        result_json[stage][k] += data[k]
+            json.dump(result_json[stage],
+                      open(os.path.join(cfg.base_dir, '{}Step{}a.json'.format(sets_full_name[stage], group)), "w"))
+        else:  # We should not merge the test data
+            json.dump(data,
+                      open(os.path.join(cfg.base_dir, '{}Step{}a.json'.format(sets_full_name[stage], group)), "w"))
 print(counters)
