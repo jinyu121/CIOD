@@ -99,7 +99,7 @@ if __name__ == '__main__':
     # The representation classifier
     class_means = torch.zeros(2048, cfg.NUM_CLASSES + 1)
     # The iCaRL-like training procedure
-    class_proto = [[] for _ in range(cfg.CIOD.TOTAL_CLS + 1)]
+    class_proto = [[] for _ in range(cfg.NUM_CLASSES + 1)]
 
     # Get the net
     if args.net == 'vgg16':

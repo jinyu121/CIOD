@@ -27,7 +27,6 @@ CLASSES: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
           'diningtable', 'dog', 'horse', 'motorbike', 'person',
           'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 CIOD:
-  TOTAL_CLS: 20
   GROUPS: 4
   NEW_CLS_LOSS_SCALE: 2.
   DISTILL_GROUP: False
