@@ -37,10 +37,10 @@ def base_object(size_info, name, bbox):
     width = size_info['width']
     height = size_info['height']
 
-    x1 = max(x1, 1) + BBOX_OFFSET
-    y1 = max(y1, 1) + BBOX_OFFSET
-    x2 = min(x2, width) + BBOX_OFFSET
-    y2 = min(y2, height) + BBOX_OFFSET
+    x1 = max(x1, 0) + BBOX_OFFSET
+    y1 = max(y1, 0) + BBOX_OFFSET
+    x2 = min(x2, width - 1) + BBOX_OFFSET
+    y2 = min(y2, height - 1) + BBOX_OFFSET
 
     return {
         'name': name, 'pose': 'Unspecified', 'truncated': '0', 'difficult': '0',
