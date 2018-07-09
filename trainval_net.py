@@ -90,7 +90,9 @@ if __name__ == '__main__':
 
     output_dir = os.path.join(args.save_dir, str(args.session), args.net, args.dataset)
     os.makedirs(output_dir, exist_ok=True)
-    json.dump(cfg, open(os.path.join(output_dir, 'config.json'), "w"))
+    cfg_to_json = deepcopy(cfg)
+    del cfg_to_json["PIXEL_MEANS"]
+    json.dump(cfg_to_json, open(os.path.join(output_dir, 'config.json'), "w"), indent=4)
 
     # initialize the tensor holders here.
     im_data = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
