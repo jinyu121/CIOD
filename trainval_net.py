@@ -371,7 +371,9 @@ if __name__ == '__main__':
             labels = np.concatenate(repr_labels, axis=0)
             labels = labels.ravel()
 
-            for ith in trange(0, now_cls_high, desc="ClsMean"):
+            # If not use exemplar manage, we should start at now_cls_low, or it will cause error.
+            re_sta = 0 if cfg.CIOD.REMEMBER_PROTO else now_cls_low
+            for ith in trange(re_sta, now_cls_high, desc="ClsMean"):
                 ind_cl = np.where(labels == ith)[0]
                 D = Dtot[:, ind_cl]
                 # Make class mean
