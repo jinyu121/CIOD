@@ -8,6 +8,7 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+import json
 import os
 import pickle
 import pprint
@@ -89,8 +90,9 @@ if __name__ == '__main__':
 
     output_dir = os.path.join(args.save_dir, str(args.session), args.net, args.dataset)
     os.makedirs(output_dir, exist_ok=True)
+    json.dump(cfg, open(os.path.join(output_dir, 'config.json'), "w"))
 
-    # initilize the tensor holders here.
+    # initialize the tensor holders here.
     im_data = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
     im_info = tensor_holder(torch.FloatTensor(1), cfg.CUDA, True)
     num_boxes = tensor_holder(torch.LongTensor(1), cfg.CUDA, True)
