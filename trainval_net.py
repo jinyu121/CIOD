@@ -372,7 +372,7 @@ if __name__ == '__main__':
             labels = labels.ravel()
 
             # If not use exemplar manage, we should start at now_cls_low, or it will cause error.
-            re_sta = 0 if cfg.CIOD.REMEMBER_PROTO else now_cls_low
+            re_sta = 0 if (cfg.CIOD.REMEMBER_PROTO or group == 0) else now_cls_low
             for ith in trange(re_sta, now_cls_high, desc="ClsMean"):
                 ind_cl = np.where(labels == ith)[0]
                 D = Dtot[:, ind_cl]
