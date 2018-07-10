@@ -171,7 +171,9 @@ if __name__ == '__main__':
     # Now we enter the group loop
     for group in trange(start_group, end_group, desc="Group", leave=True):
         now_cls_low, now_cls_high = group_cls[group], group_cls[group + 1]
-        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (now_cls_high - 1))
+        max_proto = max(1, cfg.CIOD.TOTAL_PROTO // (now_cls_high - int(not cfg.CIOD.REMEMBER_BG)))
+        # For one class, we at least preserve 1 proto
+        # And sometimes we do not want to preserve proto for background class
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
         if cfg.TRAIN.OPTIMIZER == 'adam':
@@ -382,7 +384,9 @@ if __name__ == '__main__':
                 class_means[:, ith] = torch.from_numpy(cls_mean)
                 # Example manage
                 dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
-                if ith and cfg.CIOD.REMEMBER_PROTO:  # Do not save proto for background class, for it is too many
+                if cfg.CIOD.REMEMBER_PROTO and (ith or cfg.CIOD.REMEMBER_BG):
+                    # Sometimes we do not want to remember proto for all classes, so there is `and`
+                    # Sometimes, we want to remember proto for background (0) class, so there is `or`
                     sorted_index = dis.argsort()
                     cls_set = set()
                     for idx in sorted_index:
