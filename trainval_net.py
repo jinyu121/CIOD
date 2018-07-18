@@ -133,13 +133,17 @@ if __name__ == '__main__':
 
     # How to optimize
     params = []
-    special_params_index = []
+    rpn_cls_params_index = []
+    base_net_params_index = []
     lr = cfg.TRAIN.LEARNING_RATE
 
-    for ith, (key, value) in enumerate(dict(fasterRCNN.named_parameters()).items()):  # since we froze some layers
+    for key, value in dict(fasterRCNN.named_parameters()).items():  # since we froze some layers
         if value.requires_grad:
+            ith = len(params)
             if 'RCNN_rpn.RPN_cls_score' in key:  # Record the parameter position of RPN_cls_score
-                special_params_index.append(ith)
+                rpn_cls_params_index.append(ith)
+            elif 'RCNN_base' in key:
+                base_net_params_index.append(ith)
 
             if 'bias' in key:
                 params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
@@ -179,9 +183,11 @@ if __name__ == '__main__':
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)
-        if cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN:
-            if group and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
-                set_learning_rate(optimizer, 0.0, special_params_index)
+        if group and cfg.CIOD.SWITCH_DO_IN_RPN:
+            if cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
+                set_learning_rate(optimizer, 0.0, rpn_cls_params_index)
+            if cfg.CIOD.SWITCH_FREEZE_BASE_NET:
+                set_learning_rate(optimizer, 1e-6, base_net_params_index)
         fasterRCNN.train()
 
         # Get database, and merge the class proto
