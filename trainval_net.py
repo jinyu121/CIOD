@@ -18,7 +18,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data.sampler import Sampler
 from tqdm import tqdm, trange
 
 import _init_paths
@@ -142,7 +141,7 @@ if __name__ == '__main__':
             ith = len(params)
             if 'RCNN_rpn.RPN_cls_score' in key:  # Record the parameter position of RPN_cls_score
                 rpn_cls_params_index.append(ith)
-            elif 'RCNN_base' in key:
+            if 'RCNN_base' in key:
                 base_net_params_index.append(ith)
 
             if 'bias' in key:
@@ -183,8 +182,8 @@ if __name__ == '__main__':
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)
-        if group and cfg.CIOD.SWITCH_DO_IN_RPN:
-            if cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
+        if group:
+            if cfg.CIOD.SWITCH_DO_IN_RPN and cfg.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER:
                 set_learning_rate(optimizer, 0.0, rpn_cls_params_index)
             if cfg.CIOD.SWITCH_FREEZE_BASE_NET:
                 set_learning_rate(optimizer, 1e-6, base_net_params_index)
