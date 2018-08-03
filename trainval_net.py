@@ -229,15 +229,17 @@ if __name__ == '__main__':
                 im_path = list(data[4])
 
                 fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, \
+                rois, cls_prob, bbox_pred, bbox_raw, \
                 rpn_label, rpn_feature, rpn_cls_score, \
                 rois_label, pooled_feat, cls_score, \
                 rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
+                RCNN_loss_bbox_distill = 0
+
                 if (0 != group) and (cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN):
                     # Get result from the backup net
-                    b_rois, b_cls_prob, b_bbox_pred, \
+                    b_rois, b_cls_prob, b_bbox_pred, b_bbox_raw, \
                     b_rpn_label, b_rpn_feature, b_rpn_cls_score, \
                     b_rois_label, b_pooled_feat, b_cls_score, \
                     b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
@@ -281,10 +283,18 @@ if __name__ == '__main__':
                         RCNN_loss_cls = loss_frcn_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_frcn_cls_new
                         if cfg.CIOD.DISTILL_BACKGROUND:
                             RCNN_loss_cls += loss_cls_zero
+
+                        if cfg.CIOD.DISTILL_BOUNDINGBOX and not args.class_agnostic:
+                            real_shape = [cls_prob.shape[0], cls_prob.shape[1], cfg.NUM_CLASSES + 1, 4]
+                            bbox_raw = bbox_raw.view(real_shape)[:, :, :now_cls_low, :]
+                            b_bbox_raw = b_bbox_raw.view(real_shape)[:, :, :now_cls_low, :]
+                            RCNN_loss_bbox_distill = F.mse_loss(bbox_raw, b_bbox_raw)
+
                 else:
                     RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
 
-                loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
+                loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() \
+                       + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() + RCNN_loss_bbox_distill
 
                 loss_temp += loss.data[0]
 
@@ -360,7 +370,7 @@ if __name__ == '__main__':
                 im_path = list(data[4])
 
                 fasterRCNN.zero_grad()
-                rois, cls_prob, bbox_pred, \
+                rois, cls_prob, bbox_pred, bbox_raw, \
                 rpn_label, rpn_feature, rpn_cls_score, \
                 rois_label, pooled_feat, cls_score, \
                 rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox \

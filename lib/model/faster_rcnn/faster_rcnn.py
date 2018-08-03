@@ -86,6 +86,7 @@ class _fasterRCNN(nn.Module):
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
+        bbox_raw = bbox_pred
         if self.training and not self.class_agnostic:
             # select the corresponding columns according to roi labels
             bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
@@ -110,7 +111,7 @@ class _fasterRCNN(nn.Module):
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, \
+        return rois, cls_prob, bbox_pred, bbox_raw, \
                rpn_label, rpn_feature, rpn_cls_score, \
                rois_label, pooled_feat, cls_score, \
                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox
