@@ -28,7 +28,7 @@ CLASSES: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
           'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 CIOD:
   GROUPS: 4
-  NEW_CLS_LOSS_SCALE: 2.
+  LOSS_SCALE_DISTILL: 2.
   DISTILL_GROUP: False
   DISTILL_BACKGROUND: False
   DISTILL_BOUNDINGBOX: False

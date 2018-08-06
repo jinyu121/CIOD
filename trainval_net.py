@@ -280,7 +280,7 @@ if __name__ == '__main__':
                             loss_cls_zero = F.mse_loss(pred_zero_f, label_zero_f)
 
                         # Total classification loss
-                        RCNN_loss_cls = loss_frcn_cls_old + cfg.CIOD.NEW_CLS_LOSS_SCALE * loss_frcn_cls_new
+                        RCNN_loss_cls = cfg.CIOD.LOSS_SCALE_DISTILL * loss_frcn_cls_old + loss_frcn_cls_new
                         if cfg.CIOD.DISTILL_BACKGROUND:
                             RCNN_loss_cls += loss_cls_zero
 
@@ -288,7 +288,7 @@ if __name__ == '__main__':
                             real_shape = [cls_prob.shape[0], cls_prob.shape[1], cfg.NUM_CLASSES + 1, 4]
                             bbox_raw = bbox_raw.view(real_shape)[:, :, :now_cls_low, :]
                             b_bbox_raw = b_bbox_raw.view(real_shape)[:, :, :now_cls_low, :]
-                            RCNN_loss_bbox_distill = F.mse_loss(bbox_raw, b_bbox_raw)
+                            RCNN_loss_bbox_distill = cfg.CIOD.LOSS_SCALE_DISTILL * F.mse_loss(bbox_raw, b_bbox_raw)
 
                 else:
                     RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
