@@ -179,6 +179,8 @@ if __name__ == '__main__':
         # And sometimes we do not want to preserve proto for background class
 
         lr = cfg.TRAIN.LEARNING_RATE  # Reverse the Learning Rate
+        if group:
+            lr *= cfg.CIOD.LEARNING_RATE_INIT_DISTILL
         if cfg.TRAIN.OPTIMIZER == 'adam':
             lr = lr * 0.1
         set_learning_rate(optimizer, lr)

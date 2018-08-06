@@ -28,6 +28,7 @@ CLASSES: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
           'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 CIOD:
   GROUPS: 4
+  LEARNING_RATE_INIT_DISTILL: 1.0
   LOSS_SCALE_DISTILL: 2.
   DISTILL_GROUP: False
   DISTILL_BACKGROUND: False
