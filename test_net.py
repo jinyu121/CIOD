@@ -168,7 +168,7 @@ if __name__ == '__main__':
                 features = torch.t(pooled_feat)
                 features = features / torch.norm(features)
                 dis = 1 - torch.from_numpy(
-                    cdist(features.data.t().cpu().numpy(), class_means.t().cpu().numpy(), 'euclidean')
+                    cdist(features.data.t().cpu().numpy(), class_means.t().cpu().numpy(), 'cosine')
                 ).cuda()
                 scores[:, :now_cls_high] = dis
                 scores = F.softmax(scores, dim=-1).data
