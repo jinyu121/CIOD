@@ -18,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from scipy.spatial.distance import cdist
 from tqdm import tqdm, trange
 
 import _init_paths
@@ -400,7 +401,7 @@ if __name__ == '__main__':
                 cls_mean = tmp_mean / np.linalg.norm(tmp_mean)
                 class_means[:, ith] = torch.from_numpy(cls_mean)
                 # Example manage
-                dis = np.sum((D - np.expand_dims(cls_mean, -1)) ** 2, axis=0)
+                dis = cdist(D.T, np.expand_dims(cls_mean, 0), 'euclidean').squeeze()
                 if cfg.CIOD.REMEMBER_PROTO and (ith or cfg.CIOD.REMEMBER_BG):
                     # Sometimes we do not want to remember proto for all classes, so there is `and`
                     # Sometimes, we want to remember proto for background (0) class, so there is `or`

@@ -267,13 +267,6 @@ def heat_exp(data, temperature):
     return F.softmax(data / temperature, dim=-1) / temperature
 
 
-def cdist(x, y):
-    x = x.expand([y.shape[0], *x.shape]).permute(1, 0, 2)
-    y = y.unsqueeze(0)
-    ans = torch.sqrt(torch.sum((x - y) ** 2, dim=2))
-    return ans
-
-
 def tensor_holder(data, cuda=False, variable=False):
     if cuda:
         data = data.cuda()

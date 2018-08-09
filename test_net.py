@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
+from scipy.spatial.distance import cdist
 from tqdm import tqdm, trange
 
 import _init_paths
@@ -25,7 +26,7 @@ from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 from model.rpn.bbox_transform import clip_boxes
 from model.utils.config import cfg, cfg_from_file, get_output_dir, cfg_fix
-from model.utils.net_utils import vis_detections, cdist, tensor_holder
+from model.utils.net_utils import vis_detections, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -166,7 +167,10 @@ if __name__ == '__main__':
                 scores = torch.zeros_like(cls_score)
                 features = torch.t(pooled_feat)
                 features = features / torch.norm(features)
-                scores[:, :now_cls_high] = -torch.log(torch.t(cdist(torch.t(class_means), torch.t(features.data))))
+                dis = 1 - torch.from_numpy(
+                    cdist(features.data.t().cpu().numpy(), class_means.t().cpu().numpy(), 'euclidean')
+                ).cuda()
+                scores[:, :now_cls_high] = dis
                 scores = F.softmax(scores, dim=-1).data
 
             boxes = rois.data[:, :, 1:5]
