@@ -406,6 +406,7 @@ if __name__ == '__main__':
                     # Sometimes we do not want to remember proto for all classes, so there is `and`
                     # Sometimes, we want to remember proto for background (0) class, so there is `or`
                     sorted_index = dis.argsort()
+                    # sorted_index = np.random.permutation(len(dis))
                     cls_set = set()
                     for idx in sorted_index:
                         cls_set.add(repr_images[ind_cl[idx]])
