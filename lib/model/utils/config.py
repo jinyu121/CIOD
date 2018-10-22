@@ -322,6 +322,8 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+__C.LIGHTHEAD = False
+
 # CIOD
 __C.CIOD = edict()
 __C.CIOD.SWITCH_DO_IN_RPN = True
@@ -341,6 +343,7 @@ __C.CIOD.REMEMBER_PROTO = False
 __C.CIOD.REMEMBER_BG = False
 __C.CIOD.TOTAL_PROTO = 200
 __C.CIOD.LEARNING_RATE_INIT_DISTILL = 1.0
+
 
 def get_output_dir(imdb, weights_filename):
     """Return the directory where experimental artifacts are placed.
@@ -445,3 +448,7 @@ def cfg_fix():
     __C.USE_GPU_NMS = cfg.CUDA = torch.cuda.is_available()
     __C.MGPU = cfg.CUDA and torch.cuda.device_count() > 1
     __C.TRAIN.BATCH_SIZE = max(1, torch.cuda.device_count()) * 3
+
+    if __C.LIGHTHEAD:
+        __C.TRAIN.RPN_NEGATIVE_OVERLAP = 0.5
+        __C.TEST.NMS = 0.5

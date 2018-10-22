@@ -124,7 +124,8 @@ if __name__ == '__main__':
         tqdm.write('{:d} roidb entries'.format(len(roidb)))
 
         load_name = os.path.join(
-            load_dir, 'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, group))
+            load_dir, '{}_rcnn_{}_{}_{}_{}.pth'.format(
+                "lighthead" if cfg.LIGHTHEAD else "faster", args.session, args.net, args.dataset, group))
         tqdm.write("load checkpoint {}".format(load_name))
         checkpoint = torch.load(load_name)
         fasterRCNN.load_state_dict(checkpoint['model'])

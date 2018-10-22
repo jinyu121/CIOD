@@ -225,6 +225,9 @@ class resnet(_fasterRCNN):
         self.dout_base_model = 1024
         self.pretrained = pretrained
         self.class_agnostic = class_agnostic
+        self.lighthead = cfg.LIGHTHEAD
+        if self.lighthead:
+            self.dout_lh_base_model = 2048
 
         _fasterRCNN.__init__(self, classes, class_agnostic)
 
@@ -244,7 +247,12 @@ class resnet(_fasterRCNN):
         self.RCNN_base = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu,
                                        resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3)
 
-        self.RCNN_top = nn.Sequential(resnet.layer4)
+        if self.lighthead:
+            self.lighthead_base = nn.Sequential(resnet.layer4)
+            self.RCNN_top = nn.Sequential(nn.Linear(490 * 7 * 7, 2048),
+                                          nn.ReLU(inplace=True))  # 490 channels input into FC layer
+        else:
+            self.RCNN_top = nn.Sequential(resnet.layer4)
 
         self.RCNN_cls_score = nn.Linear(2048, self.n_classes)
         if self.class_agnostic:
@@ -256,7 +264,10 @@ class resnet(_fasterRCNN):
         for p in self.RCNN_base[0].parameters(): p.requires_grad = False
         for p in self.RCNN_base[1].parameters(): p.requires_grad = False
 
-        assert (0 <= cfg.RESNET.FIXED_BLOCKS < 4)
+        assert (0 <= cfg.RESNET.FIXED_BLOCKS < 5 if self.lighthead else 4)
+        if self.lighthead:
+            if cfg.RESNET.FIXED_BLOCKS >= 4:
+                for p in self.RCNN_base[7].parameters(): p.requires_grad = False
         if cfg.RESNET.FIXED_BLOCKS >= 3:
             for p in self.RCNN_base[6].parameters(): p.requires_grad = False
         if cfg.RESNET.FIXED_BLOCKS >= 2:
@@ -290,5 +301,9 @@ class resnet(_fasterRCNN):
             self.RCNN_top.apply(set_bn_eval)
 
     def _head_to_tail(self, pool5):
-        fc7 = self.RCNN_top(pool5).mean(3).mean(2)
+        if self.lighthead:
+            pool5 = pool5.view(pool5.size(0), -1)
+            fc7 = self.RCNN_top(pool5)
+        else:
+            fc7 = self.RCNN_top(pool5).mean(3).mean(2)
         return fc7

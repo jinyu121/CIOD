@@ -120,7 +120,8 @@ if __name__ == '__main__':
     if args.group > 0:  # If not train from the first group, We should load the weights here
         load_name = os.path.join(
             output_dir,
-            'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, args.group - 1))
+            '{}_rcnn_{}_{}_{}_{}.pth'.format(
+                "lighthead" if cfg.LIGHTHEAD else "faster", args.session, args.net, args.dataset, args.group - 1))
         checkpoint = torch.load(load_name)
         fasterRCNN.load_state_dict(checkpoint['model'])
 
@@ -342,7 +343,8 @@ if __name__ == '__main__':
             if args.save_without_repr:  # We can save weights before representation learning
                 save_name = os.path.join(
                     output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_norepr.pth'.format(args.session, args.net, args.dataset, group))
+                    '{}_rcnn_{}_{}_{}_{}_norepr.pth'.format(
+                        "lighthead" if cfg.LIGHTHEAD else "faster", args.session, args.net, args.dataset, group))
                 save_checkpoint({
                     'session': args.session,
                     'epoch': cfg.TRAIN.MAX_EPOCH,
@@ -417,14 +419,16 @@ if __name__ == '__main__':
             if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
                 save_name = os.path.join(
                     output_dir,
-                    'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
+                    '{}_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(
+                        "lighthead" if cfg.LIGHTHEAD else "faster", args.session, args.net, args.dataset, group))
                 pickle.dump(class_means, open("foo.pkl", "wb"))
                 assert False, "Nan or Inf occurred! Dumped ar {} for check".format(save_name)
 
         # Save the model
         save_name = os.path.join(
             output_dir,
-            'faster_rcnn_{}_{}_{}_{}.pth'.format(args.session, args.net, args.dataset, group))
+            '{}_rcnn_{}_{}_{}_{}.pth'.format(
+                "lighthead" if cfg.LIGHTHEAD else "faster", args.session, args.net, args.dataset, group))
         save_checkpoint({
             'session': args.session,
             'epoch': cfg.TRAIN.MAX_EPOCH,

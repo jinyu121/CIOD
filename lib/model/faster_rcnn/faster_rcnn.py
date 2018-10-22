@@ -9,7 +9,7 @@ from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
 from model.rpn.rpn import _RPN
 from model.utils.config import cfg
-from model.utils.net_utils import _smooth_l1_loss, _affine_grid_gen
+from model.utils.net_utils import _smooth_l1_loss, _affine_grid_gen, LargeSeparableConv2d
 from model.utils.net_utils import change_require_gradient
 
 
@@ -21,9 +21,17 @@ class _fasterRCNN(nn.Module):
         self.classes = classes
         self.n_classes = len(self.classes)
         self.class_agnostic = class_agnostic
+        self.lighthead = cfg.LIGHTHEAD
+
         # loss
         self.RCNN_loss_cls = 0
         self.RCNN_loss_bbox = 0
+
+        # define Large Separable Convolution Layer
+        if self.lighthead:
+            self.lsconv = LargeSeparableConv2d(
+                self.dout_lh_base_model, bias=False, bn=False)
+            self.lh_relu = nn.ReLU(inplace=True)
 
         # define rpn
         self.RCNN_rpn = _RPN(self.dout_base_model)
@@ -66,6 +74,16 @@ class _fasterRCNN(nn.Module):
             rpn_loss_bbox = 0
 
         rois = Variable(rois)
+
+        # Large Separable Conv
+        if self.lighthead:
+            try:
+                base_feat = self.lighthead_base(base_feat)
+            except Exception:
+                pass
+            base_feat = self.lsconv(base_feat)
+            base_feat = self.lh_relu(base_feat)
+
         # do roi pooling based on predicted rois
 
         if cfg.POOLING_MODE == 'crop':
@@ -107,6 +125,8 @@ class _fasterRCNN(nn.Module):
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
+            if self.lighthead:
+                RCNN_loss_bbox *= 2  # "to balance multi-task training"
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)

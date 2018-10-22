@@ -15,6 +15,7 @@ import math
 import torchvision.models as models
 from model.faster_rcnn.faster_rcnn import _fasterRCNN
 import pdb
+from model.utils.config import cfg
 
 
 class vgg16(_fasterRCNN):
@@ -23,6 +24,9 @@ class vgg16(_fasterRCNN):
         self.dout_base_model = 512
         self.pretrained = pretrained
         self.class_agnostic = class_agnostic
+        self.lighthead = cfg.LIGHTHEAD
+        if self.lighthead:
+            self.dout_lh_base_model = 512
 
         _fasterRCNN.__init__(self, classes, class_agnostic)
 
@@ -39,20 +43,25 @@ class vgg16(_fasterRCNN):
         self.RCNN_base = nn.Sequential(*list(vgg.features._modules.values())[:-1])
 
         # Fix the layers before conv3:
-        for layer in range(10):
-            for p in self.RCNN_base[layer].parameters(): p.requires_grad = False
+        if self.pretrained:
+            for layer in range(len(self.RCNN_base)):
+                for p in self.RCNN_base[layer].parameters(): p.requires_grad = False
 
         # self.RCNN_base = _RCNN_base(vgg.features, self.classes, self.dout_base_model)
+        if self.lighthead:
+            self.RCNN_top = nn.Sequential(
+                nn.Linear(490 * 7 * 7, 2048), nn.ReLU(inplace=True))  # 490 channels input into FC layer
+        else:
+            self.RCNN_top = vgg.classifier
 
-        self.RCNN_top = vgg.classifier
-
-        # not using the last maxpool layer
-        self.RCNN_cls_score = nn.Linear(4096, self.n_classes)
+        # Prediction
+        d_in = 2048 if self.lighthead else 4096
+        self.RCNN_cls_score = nn.Linear(d_in, self.n_classes)
 
         if self.class_agnostic:
-            self.RCNN_bbox_pred = nn.Linear(4096, 4)
+            self.RCNN_bbox_pred = nn.Linear(d_in, 4)
         else:
-            self.RCNN_bbox_pred = nn.Linear(4096, 4 * self.n_classes)
+            self.RCNN_bbox_pred = nn.Linear(d_in, 4 * self.n_classes)
 
     def _head_to_tail(self, pool5):
 
