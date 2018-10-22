@@ -20,6 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.spatial.distance import cdist
 from tqdm import tqdm, trange
+from tensorboardX import SummaryWriter
 
 import _init_paths
 from datasets.samplers.rcnnsampler import RcnnSampler
@@ -52,8 +53,6 @@ def parse_args():
                         help='Whether perform class_agnostic bbox regression')
 
     # Logging, displaying and saving
-    parser.add_argument('--use_tfboard', dest='use_tfboard', action="store_true",
-                        help='Whether use tensorflow tensorboard')
     parser.add_argument('--save_dir', dest='save_dir', nargs=argparse.REMAINDER, default="results",
                         help='Directory to save models')
     parser.add_argument('--save_without_repr', dest='save_without_repr', action="store_true",
@@ -71,10 +70,7 @@ if __name__ == '__main__':
     print('Called with args:')
     print(args)
 
-    if args.use_tfboard:
-        from tensorboardX import SummaryWriter
-
-        logger = SummaryWriter(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))
+    logger = SummaryWriter(os.path.join('logs', '{}_{}'.format(args.session, args.dataset)))
 
     args.imdb_name = "voc_{}_trainval".format(args.dataset)
     args.imdbval_name = "voc_{}_test".format(args.dataset)
@@ -325,17 +321,16 @@ if __name__ == '__main__':
                         args.session, group, lr, loss_temp, fg_cnt, bg_cnt,
                         loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box))
 
-                    if args.use_tfboard:
-                        info = {
-                            'loss': loss_temp,
-                            'loss_rpn_cls': loss_rpn_cls,
-                            'loss_rpn_box': loss_rpn_box,
-                            'loss_rcnn_cls': loss_rcnn_cls,
-                            'loss_rcnn_box': loss_rcnn_box,
-                            'learning_rate': lr
-                        }
-                        for tag, value in info.items():
-                            logger.add_scalar("Group{}/{}".format(group, tag), value, tot_step)
+                    info = {
+                        'loss': loss_temp,
+                        'loss_rpn_cls': loss_rpn_cls,
+                        'loss_rpn_box': loss_rpn_box,
+                        'loss_rcnn_cls': loss_rcnn_cls,
+                        'loss_rcnn_box': loss_rcnn_box,
+                        'learning_rate': lr
+                    }
+                    for tag, value in info.items():
+                        logger.add_scalar("Group{}/{}".format(group, tag), value, tot_step)
 
                     loss_temp = 0
 
