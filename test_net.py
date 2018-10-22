@@ -38,7 +38,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
 
     # Config the session ID for identify
-    parser.add_argument('--s', dest='session', default=1, type=int, help='Training session ID')
+    parser.add_argument('--session', dest='session', default=1, type=int, help='Training session ID')
     parser.add_argument('--group', dest='group', type=int, default=-1, help='Train certain group, or all (-1) groups')
 
     # Config the dataset
