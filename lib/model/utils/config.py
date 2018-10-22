@@ -343,6 +343,8 @@ __C.CIOD.REMEMBER_PROTO = False
 __C.CIOD.REMEMBER_BG = False
 __C.CIOD.TOTAL_PROTO = 200
 __C.CIOD.LEARNING_RATE_INIT_DISTILL = 1.0
+__C.CIOD.RANDOM_EM = False
+
 
 
 def get_output_dir(imdb, weights_filename):
