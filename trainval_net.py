@@ -405,8 +405,11 @@ if __name__ == '__main__':
                 if cfg.CIOD.REMEMBER_PROTO and (ith or cfg.CIOD.REMEMBER_BG):
                     # Sometimes we do not want to remember proto for all classes, so there is `and`
                     # Sometimes, we want to remember proto for background (0) class, so there is `or`
-                    sorted_index = dis.argsort()
-                    # sorted_index = np.random.permutation(len(dis))
+                    if cfg.CIOD.RANDOM_EM:
+                        sorted_index = np.random.permutation(len(dis))
+                    else:
+                        sorted_index = dis.argsort()
+
                     cls_set = set()
                     for idx in sorted_index:
                         cls_set.add(repr_images[ind_cl[idx]])
