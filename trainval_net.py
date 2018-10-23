@@ -412,7 +412,7 @@ if __name__ == '__main__':
                             break
                     class_proto[ith] = list(cls_set)
 
-            if np.any(np.isnan(class_means)) or np.any(np.isinf(class_means)):
+            if np.any(np.isnan(class_means.numpy())) or np.any(np.isinf(class_means.numpy())):
                 save_name = os.path.join(
                     output_dir,
                     'faster_rcnn_{}_{}_{}_{}_FAIL.pkl'.format(args.session, args.net, args.dataset, group))
