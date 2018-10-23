@@ -23,10 +23,10 @@ And setup the environment:
 * CUDA 8.0 or higher
 
 
-Install all the python dependencies using pip:
+Install all the python dependencies using conda:
 
 ```
-pip3 install -r requirements.txt
+conda env create -f environment.yml --name ciod-faster
 ```
 
 Compile the cuda dependencies using following simple commands:
@@ -48,13 +48,13 @@ We can do it using `select_pic.py`.
 ### Train
 
 ```
-python3 ./trainval_net.py --use_tfboard
+python3 ./trainval_net.py --session 10000
 ```
 
 ## Test
 
 ```
-python3 ./test_net.py --no_repr
+python3 ./test_net.py --session 10000 --no_repr
 ```
 
 ## Authorship
@@ -73,8 +73,7 @@ python3 ./test_net.py --no_repr
     
     @inproceedings{renNIPS15fasterrcnn,
         Author = {Shaoqing Ren and Kaiming He and Ross Girshick and Jian Sun},
-        Title = {Faster {R-CNN}: Towards Real-Time Object Detection
-                 with Region Proposal Networks},
+        Title = {Faster {R-CNN}: Towards Real-Time Object Detection with Region Proposal Networks},
         Booktitle = {Advances in Neural Information Processing Systems ({NIPS})},
         Year = {2015}
     }
