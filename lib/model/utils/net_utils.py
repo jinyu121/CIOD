@@ -1,8 +1,8 @@
 import pdb
+import random
 
 import cv2
 import numpy as np
-import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -295,9 +295,8 @@ def ciod_old_and_new(tot_cls, tot_group, sep_group):
         else:
             tmp = [[0]]
         group_merged_arr.append(tmp)
-    group_cls_arr = [tensor_holder(torch.from_numpy(np.array([0] + x)), cfg.CUDA, True) for x in group_cls_arr]
-    group_merged_arr = [[tensor_holder(torch.from_numpy(np.array(x)), cfg.CUDA, True) for x in y] for y in
-                        group_merged_arr]
+    group_cls_arr = [np.array([0] + x) for x in group_cls_arr]
+    group_merged_arr = [[np.array(x) for x in y] for y in group_merged_arr]
     return group_cls, group_cls_arr, group_merged_arr
 
 

@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy.spatial.distance import cdist
-from tqdm import tqdm, trange
 from tensorboardX import SummaryWriter
+from tqdm import tqdm, trange
 
 import _init_paths
 from datasets.samplers.rcnnsampler import RcnnSampler
@@ -256,8 +256,8 @@ if __name__ == '__main__':
                         # For old class, use knowledge distillation with KLDivLoss
                         loss_frcn_cls_old = 0
                         for index_old in group_merged_arr[group]:
-                            label_old = heat_exp(b_cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
-                            pred_old = heat_exp(cls_score.index_select(1, index_old), cfg.CIOD.TEMPERATURE)
+                            label_old = heat_exp(b_cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
+                            pred_old = heat_exp(cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
                             if cfg.CIOD.DISTILL_METHOD == 'kldiv':
                                 loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
                             elif cfg.CIOD.DISTILL_METHOD == 'mse':
@@ -266,9 +266,10 @@ if __name__ == '__main__':
                                 raise KeyError("Unknown distill method")
 
                         # For new classes, use cross entropy loss
-                        label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
-                        pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
-                        loss_frcn_cls_new = F.cross_entropy(pred_new, label_new)
+                        # label_new = torch.max(torch.zeros_like(rois_label), rois_label - now_cls_low + 1)
+                        # pred_new = cls_score.index_select(1, group_cls_arr[group]).contiguous()
+                        # loss_frcn_cls_new = F.cross_entropy(pred_new, label_new)
+                        loss_frcn_cls_new = F.cross_entropy(cls_score, rois_label)
 
                         # Process class 0 (__background__)
                         # If it is background class, we do not want to change it too much
