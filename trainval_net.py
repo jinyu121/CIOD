@@ -235,6 +235,7 @@ if __name__ == '__main__':
                     = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
                 RCNN_loss_bbox_distill = 0
+                cls_score = cls_score[:, :now_cls_high].contiguous()
 
                 if (0 != group) and (cfg.CIOD.SWITCH_DO_IN_RPN or cfg.CIOD.SWITCH_DO_IN_FRCN):
                     # Get result from the backup net
@@ -243,6 +244,8 @@ if __name__ == '__main__':
                     b_rois_label, b_pooled_feat, b_cls_score, \
                     b_rpn_loss_cls, b_rpn_loss_bbox, b_RCNN_loss_cls, b_RCNN_loss_bbox \
                         = b_fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
+
+                    b_cls_score = b_cls_score[:, :now_cls_low].contiguous()
 
                     if cfg.CIOD.SWITCH_DO_IN_RPN:
                         # RPN binary classification loss
@@ -291,7 +294,7 @@ if __name__ == '__main__':
                             RCNN_loss_bbox_distill = cfg.CIOD.LOSS_SCALE_DISTILL * F.mse_loss(bbox_raw, b_bbox_raw)
 
                 else:
-                    RCNN_loss_cls = F.cross_entropy(cls_score[..., :now_cls_high], rois_label)
+                    RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
 
                 loss = rpn_loss_cls.mean() + rpn_loss_bbox.mean() \
                        + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() + RCNN_loss_bbox_distill
