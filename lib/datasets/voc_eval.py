@@ -221,5 +221,7 @@ def voc_eval(detpath,
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
     ap = voc_ap(rec, prec, use_07_metric)
 
-    return rec, prec, ap, \
-           gt_tot, nd, int(tp[-1]), int(fp[-1]), np.sum(fp_iou), np.sum(fp_cls), np.sum(fp_oth)
+    tp_m1 = int(tp[-1]) if len(tp) else 0
+    fp_m1 = int(fp[-1]) if len(fp) else 0
+
+    return rec, prec, ap, gt_tot, nd, tp_m1, fp_m1, np.sum(fp_iou), np.sum(fp_cls), np.sum(fp_oth)
