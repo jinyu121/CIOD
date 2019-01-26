@@ -3,9 +3,9 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import os.path as osp
 
 import numpy as np
-import os.path as osp
 import torch
 # `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
@@ -329,7 +329,7 @@ __C.CIOD.SWITCH_DO_IN_FRCN = True
 __C.CIOD.SWITCH_FREEZE_RPN_CLASSIFIER = True
 __C.CIOD.SWITCH_FREEZE_BASE_NET = False
 __C.CIOD.GROUPS = 4
-__C.CIOD.TEMPERATURE = 2
+__C.CIOD.TEMPERATURE = 2.
 __C.CIOD.RPN_CLS_LOSS_SCALE_FEATURE = 0.25
 __C.CIOD.LOSS_SCALE_DISTILL = 2.
 __C.CIOD.DISTILL_GROUP = False

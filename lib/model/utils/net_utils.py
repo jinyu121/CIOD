@@ -264,7 +264,7 @@ def heat_sum(data, temperature):
 
 
 def heat_exp(data, temperature):
-    return F.softmax(data / temperature, dim=-1) / temperature
+    return data / temperature
 
 
 def tensor_holder(data, cuda=False, variable=False):

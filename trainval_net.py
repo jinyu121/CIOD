@@ -26,9 +26,9 @@ import _init_paths
 from datasets.samplers.rcnnsampler import RcnnSampler
 from model.faster_rcnn.resnet import resnet
 from model.faster_rcnn.vgg16 import vgg16
-from model.utils.config import cfg, cfg_from_file, cfg_fix
-from model.utils.net_utils import adjust_learning_rate, set_learning_rate, save_checkpoint, clip_gradient
-from model.utils.net_utils import change_require_gradient, heat_exp, tensor_holder, ciod_old_and_new, flatten
+from model.utils.config import cfg, cfg_fix, cfg_from_file
+from model.utils.net_utils import adjust_learning_rate, clip_gradient, save_checkpoint, set_learning_rate
+from model.utils.net_utils import change_require_gradient, ciod_old_and_new, flatten, heat_exp, tensor_holder
 from roi_data_layer.roibatchLoader import roibatchLoader
 from roi_data_layer.roidb import combined_roidb
 
@@ -259,10 +259,10 @@ if __name__ == '__main__':
                         # For old class, use knowledge distillation with KLDivLoss
                         loss_frcn_cls_old = 0
                         for index_old in group_merged_arr[group]:
-                            label_old = heat_exp(b_cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
-                            pred_old = heat_exp(cls_score[:, index_old], cfg.CIOD.TEMPERATURE)
+                            label_old = F.log_softmax(heat_exp(b_cls_score[:, index_old], cfg.CIOD.TEMPERATURE), -1)
+                            pred_old = F.softmax(heat_exp(cls_score[:, index_old], cfg.CIOD.TEMPERATURE))
                             if cfg.CIOD.DISTILL_METHOD == 'kldiv':
-                                loss_frcn_cls_old += F.kl_div(torch.log(pred_old), label_old)
+                                loss_frcn_cls_old += F.kl_div(pred_old, label_old)
                             elif cfg.CIOD.DISTILL_METHOD == 'mse':
                                 loss_frcn_cls_old += F.mse_loss(pred_old, label_old)
                             else:

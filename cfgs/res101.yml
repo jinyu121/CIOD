@@ -28,7 +28,7 @@ CLASSES: ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
           'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
 CIOD:
   GROUPS: 4
-  LEARNING_RATE_INIT_DISTILL: 1.0
+  LEARNING_RATE_INIT_DISTILL: 1.
   LOSS_SCALE_DISTILL: 2.
   DISTILL_GROUP: False
   DISTILL_BACKGROUND: False
@@ -37,7 +37,8 @@ CIOD:
   SWITCH_DO_IN_FRCN: True
   SWITCH_FREEZE_BASE_NET: False
   SWITCH_FREEZE_RPN_CLASSIFIER: True
-  TEMPERATURE: 2
+  RPN_CLS_LOSS_SCALE_FEATURE: 0.25
+  TEMPERATURE: 2.
   DISTILL_METHOD: kldiv
   REPRESENTATION: True
   REMEMBER_PROTO: False
