@@ -8,12 +8,12 @@ Based on Faster R-CNN, CIOD can add new class to a well-trained object detector,
 
 First of all, clone the code
 ```
-git clone https://github.com/jinyu121/CIOD-FasterRCNN
+git clone https://github.com/jinyu121/CIOD
 ```
 
 Then, create a folder:
 ```
-cd faster-rcnn.pytorch && mkdir data
+cd CIOD && mkdir data
 ```
 
 And setup the environment:
@@ -57,19 +57,21 @@ python3 ./trainval_net.py --session 10000
 python3 ./test_net.py --session 10000 --no_repr
 ```
 
-## Authorship
-
-+ [Yu Hao](https://haoyu.love)
-+ The code is based on [faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch)
-
 ## Citation
 
-    @article{jinyu121-ciod-fasterrcnn,
-        Author = {Yu Hao},
-        Title = {CIOD: Class Incremental Object Detector},
-        Journal = {https://github.com/jinyu121/CIOD-FasterRCNN},
-        Year = {2018}
-    } 
+    @InProceedings{ICME2019:FCIOD,
+        author = {Yu Hao and Yanwei Fu and Yu-Gang, Jiang and Qi, Tian,
+        title = {An End-to-End Architecture for Class-Incremental Object Detection With Knowledge Distillation},
+        booktitle = {IEEE International Conference on Multimedia and Expo (ICME '19)},
+        year = {2019}
+    }
+
+    @InProceedings{ICMR2019:TGFS, 
+        author = {Yu, Hao and Yanwei, Fu and Yu-Gang, Jiang}, 
+        title = {Take Goods from Shelves: A Dataset for Class-Incremental Object Detection},
+        booktitle = {ACM International Conference on Multimedia Retrieval (ICMR '19)},
+        year = {2019}
+    }
     
     @inproceedings{renNIPS15fasterrcnn,
         Author = {Shaoqing Ren and Kaiming He and Ross Girshick and Jian Sun},
@@ -77,3 +79,9 @@ python3 ./test_net.py --session 10000 --no_repr
         Booktitle = {Advances in Neural Information Processing Systems ({NIPS})},
         Year = {2015}
     }
+
+## Note
+
+It's toooo busy to re-write the code using [Detectron](https://github.com/facebookresearch/Detectron) or pure [TorchVision](https://github.com/pytorch/vision), which have been planned for long.
+
+And you can also check out `d58255605e37e362ee746637fe93efb669a7e7ab`. Most of the results are produced based on this commit.
